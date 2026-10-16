@@ -30,10 +30,27 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1d22; col
 #station ol { margin: 6px 0 0; padding-left: 18px; color: var(--muted); }
 #station .x { position: absolute; top: 6px; right: 10px; cursor: pointer; color: var(--muted); }
 .lil-gui.root { --width: 250px; }
+#tour { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); width: min(520px, calc(100vw - 32px)); background: rgba(16, 19, 24, 0.94); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 14px 18px 12px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45); backdrop-filter: blur(8px); z-index: 5; display: none; font-size: 13.5px; line-height: 1.5; }
+#tour h2 { margin: 4px 0 6px; font-size: 17px; }
+#tour p { margin: 0 0 8px; color: #d5dbe2; }
+#tour .tour-top { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--muted); }
+#tour button { font: inherit; cursor: pointer; border-radius: 7px; border: 0; }
+#tour .tour-skip { background: none; color: var(--muted); padding: 2px 4px; font-size: 11px; }
+#tour .tour-skip:hover { color: var(--fg); }
+#tour .tour-nav { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+#tour .tour-dots { flex: 1; display: flex; gap: 5px; }
+#tour .tour-dots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255, 255, 255, 0.18); }
+#tour .tour-dots i.on { background: var(--accent); }
+#tour .tour-back { background: rgba(255, 255, 255, 0.08); color: var(--fg); padding: 6px 12px; }
+#tour .tour-back:disabled { opacity: 0.35; cursor: default; }
+#tour .tour-next { background: var(--accent); color: #fff; padding: 6px 14px; font-weight: 600; }
+.tour-hl { outline: 2px solid var(--accent); outline-offset: 3px; animation: tour-pulse 1.6s ease-in-out infinite; }
+@keyframes tour-pulse { 50% { outline-color: rgba(47, 158, 90, 0.25); } }
 @media (max-width: 700px) {
   #hud { min-width: 0; font-size: 11px; padding: 8px 10px; }
   #hud .big { font-size: 22px; }
   #bars { right: 12px; height: 70px; }
   #station { left: 12px; right: 12px; width: auto; top: auto; bottom: 90px; max-height: 45vh; }
   #camhint { display: none; }
+  #tour { bottom: 90px; font-size: 12.5px; max-height: 55vh; overflow-y: auto; }
 }
