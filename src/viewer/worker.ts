@@ -46,7 +46,7 @@ export class Worker {
     this.head.position.y = 0.78;
     this.head.castShadow = true;
     this.upper.add(this.head);
-    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.115, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat(pick([0x1d1d1b, 0xe9542f, 0x334155], 4)));
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.115, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat(pick([0x1d1d1b, 0x2f9e5a, 0x334155], 4)));
     cap.position.y = 0.8;
     this.upper.add(cap);
     for (const [arm, s] of [[this.armL, -1], [this.armR, 1]] as const) {

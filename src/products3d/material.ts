@@ -64,6 +64,6 @@ else if (vPart > 0.5 && vPart < 1.5) { roughnessFactor = 0.42; }
 else if (vPart > 6.5) { roughnessFactor = 0.8; }`,
       );
   };
-  m.customProgramCacheKey = () => 'oda-product-v1';
+  m.customProgramCacheKey = () => 'grocery-product-v1';
   return m;
 }

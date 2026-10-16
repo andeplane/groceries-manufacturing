@@ -1,6 +1,6 @@
 # groceries-manufacturing
 
-A simulation of an Oda-style grocery packing loop. Orders come in, are split into boxes, the boxes
+A simulation of a grocery packing loop for Kurvi, a made-up online grocer. Orders come in, are split into boxes, the boxes
 ride a circulating conveyor past 26 packing stations, divert into a station's cache lane when they
 need products from it, get packed by a person, merge back, and leave for the dock where a truck for
 their delivery area waits for its last box.
@@ -8,11 +8,11 @@ their delivery area waits for its last box.
 - **Headless core** (`src/core`) — pure TypeScript, no DOM. Simulates a full shift in well under a
   second (~30,000× real time), so strategies can be swept from Node.
 - **3D factory viewer** (`index.html`, `src/viewer`) — three.js rendering of the same core in real
-  time: conveyor loop, station lanes and caches, packers, shelves stocked with the real Oda
+  time: conveyor loop, station lanes and caches, packers, shelves stocked with a real grocery
   assortment, products dropping into boxes, outbound lanes and trucks.
 - **3D products** (`src/products3d`, `products.html`) — 35 procedural packaging meshes (can, PET
-  bottle, gable carton, pillow bag, tray, …) with each product's photo from oda.com printed on its
-  label. Standalone (three.js only) so other projects (oda-store) can reuse it.
+  bottle, gable carton, pillow bag, tray, …) with each product's photo printed on its
+  label. Standalone (three.js only) so other projects can reuse it.
 
 ## Run
 
@@ -43,17 +43,17 @@ Viewer URL options: `?warm=1800` (pre-run that many seconds), `?view=station|loo
 
 ### UPH
 
-Oda's published UPH (~300) counts all productive warehouse hours (receiving, restocking, packing,
+Published online-grocer UPH figures (~300) counts all productive warehouse hours (receiving, restocking, packing,
 loading). The viewer and CLI therefore report:
 
-- **UPH per packer** — units per packer-hour at the stations (~460; Oda Systems cites 500+ picks per operator-hour),
+- **UPH per packer** — units per packer-hour at the stations (~460; published figures cite 500+ picks per operator-hour),
 - **Warehouse UPH** — the same units divided by packer hours plus support hours (`supportStaffRatio`, default 0.5 → ~310),
 - **Line output** — total units/hour out of the loop.
 
 ## Data
 
-`public/products.json` is built by `scripts/build_catalog.py` from the oda-store catalog (5,185
+`public/products.json` is built by `scripts/build_catalog.py` from a grocery store catalog (5,185
 products) plus `data/classification.jsonl` (packaging type, temperature and size class per product,
 one OpenAI Decisions API call each; types in `data/geometries.json`). Dimensions come from the pack
 contents ("400 g", "1,5 l") × a per-type packaging density, shaped by the type's aspect ratio.
-Product photos are the oda-store texture atlases.
+Product photos come from that catalog's texture atlases.

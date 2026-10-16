@@ -2,7 +2,7 @@
   --bg: rgba(16, 19, 24, 0.82);
   --fg: #eef1f4;
   --muted: #9aa4b1;
-  --accent: #e9542f;
+  --accent: #2f9e5a;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1d22; color: var(--fg); font: 13px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif; }

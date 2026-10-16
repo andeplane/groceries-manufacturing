@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Simulation of an Oda-style grocery packing loop: headless core + three.js factory viewer",
+  "description": "Simulation of a grocery packing loop: headless core + three.js factory viewer",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

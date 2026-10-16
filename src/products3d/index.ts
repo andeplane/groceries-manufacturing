@@ -1,5 +1,5 @@
 /**
- * Reusable 3D product models for the Oda catalog: 35 procedural packaging meshes, a single
+ * Reusable 3D product models for the grocery catalog: 35 procedural packaging meshes, a single
  * atlas-textured material, and an instanced layer. Depends only on three.js.
  *
  *   const mat = productMaterial(atlasTexture);

@@ -35,7 +35,7 @@ export interface SimConfig {
   /** Human floor: nobody picks, scans and places a unit faster than this (s). */
   unitTimeMin: number;
   /**
-   * Support hours (receiving, restocking, loading, cleaning) per packer hour. Oda's published UPH
+   * Support hours (receiving, restocking, loading, cleaning) per packer hour. Online grocers' published UPH
    * (~300) counts all productive warehouse hours, not just packing.
    */
   supportStaffRatio: number;

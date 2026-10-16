@@ -1,12 +1,12 @@
 /**
- * Procedural base meshes for the 35 Oda packaging types (data/geometries.json).
+ * Procedural base meshes for the 35 grocery packaging types (data/geometries.json).
  *
  * Every mesh is normalised to the unit box [-0.5,0.5]×[0,1]×[-0.5,0.5] (origin at the bottom
  * centre, +z = front) and is scaled per product to its outer w×h×d. Each vertex carries a
  * `aPart` material slot (see PART) and a `uv` that is only meaningful on LABEL parts, where the
  * product photo is printed (u may run past 1 to repeat the label around a cylinder).
  *
- * Standalone: depends only on three.js, so it can be dropped into other projects (e.g. oda-store).
+ * Standalone: depends only on three.js, so it can be dropped into other projects (e.g. a 3D store).
  */
 import * as THREE from 'three';
 

@@ -123,7 +123,7 @@ async function main() {
   };
 
   // ---------- GUI ----------
-  const gui = new GUI({ title: 'Oda packing loop' });
+  const gui = new GUI({ title: 'Kurvi packing loop' });
   const play = gui.addFolder('Playback');
   play.add(params, 'speed', { '¼×': 0.25, '1×': 1, '2×': 2, '4×': 4, '10×': 10, '30×': 30, '60×': 60, '120×': 120, '300×': 300, '600×': 600 }).name('speed');
   play.add(params, 'paused');
@@ -233,10 +233,10 @@ async function main() {
     const s = sim.stats();
     const u = recentUtil();
     const meanU = u.reduce((a, b) => a + b, 0) / Math.max(1, u.length);
-    hud.innerHTML = `<h1><b>oda</b> packing loop · ${clock(sim.t)} · ${params.paused ? 'paused' : params.speed + '×'}</h1>
+    hud.innerHTML = `<h1><b>kurvi</b> packing loop · ${clock(sim.t)} · ${params.paused ? 'paused' : params.speed + '×'}</h1>
       <div class="big">${fmt(s.uphPerPackerRecent)} <small>UPH per packer (10 min)</small></div>
       <table>
-      <tr><td>Warehouse UPH (incl. support)</td><td>${fmt(s.uphWarehouseRecent)} <span class="muted">· Oda ≈ 300</span></td></tr>
+      <tr><td>Warehouse UPH (incl. support)</td><td>${fmt(s.uphWarehouseRecent)} <span class="muted">· industry ≈ 300</span></td></tr>
       <tr><td>Line output</td><td>${fmt(s.lineUphRecent)} units/h · ${sim.cfg.stations} packers</td></tr>
       <tr><td>Units packed</td><td>${fmt(s.unitsPacked)}</td></tr>
       <tr><td>Orders in / shipped</td><td>${fmt(s.ordersArrived)} / ${fmt(s.ordersShipped)}</td></tr>
@@ -250,7 +250,7 @@ async function main() {
     drawChart(hud.querySelector('#chart') as HTMLCanvasElement, history.map((h) => h.t), [
       { name: 'per packer', color: '#4ade80', values: history.map((h) => h.packer) },
       { name: 'warehouse', color: '#60a5fa', values: history.map((h) => h.whse) },
-    ], [{ value: 310, label: 'Oda ~310' }]);
+    ], [{ value: 310, label: 'industry ~310' }]);
     const bl = blockedHist.length >= 2 ? blockedHist[blockedHist.length - 1].blocked.map((x, i) => (x - blockedHist[0].blocked[i]) / Math.max(1, blockedHist[blockedHist.length - 1].t - blockedHist[0].t)) : [];
     barEls.forEach((el, i) => {
       (el.children[1] as HTMLElement).style.height = `${Math.round(u[i] * 100)}%`;
