@@ -1,0 +1,29 @@
+{
+  "name": "groceries-manufacturing",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Simulation of an Oda-style grocery packing loop: headless core + three.js factory viewer",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "sim": "tsx src/cli/run.ts",
+    "sweep": "tsx src/cli/sweep.ts",
+    "build-catalog": "python3 scripts/build_catalog.py"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/three": "^0.170.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.3",
+    "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "lil-gui": "^0.20.0",
+    "three": "^0.170.0"
+  }
+}
