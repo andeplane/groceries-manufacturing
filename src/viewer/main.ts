@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import GUI from 'lil-gui';
 import {
-  BOXING_STRATEGIES, DEFAULT_CONFIG, RELEASE_POLICIES, ROUTE_NAMES, SLOTTING_STRATEGIES, THEMES, Simulation,
+  BOXING_STRATEGIES, DEFAULT_CONFIG, PACKER_KINDS, RELEASE_POLICIES, ROUTE_NAMES, SLOTTING_STRATEGIES, THEMES, Simulation,
   type Product, type SimConfig,
 } from '../core';
 import { loadProductAtlas, probeMaxTextureSize } from './textures';
@@ -155,6 +155,10 @@ async function main() {
   ops.add(params, 'unitTime', 1, 15, 0.1).name('sec / unit (mean)').onChange(live('unitTime'));
   ops.add(params, 'unitTimeCv', 0, 1, 0.05).name('sec / unit spread (σ/μ)').onChange(live('unitTimeCv'));
   ops.add(params, 'unitTimeMin', 0.5, 6, 0.1).name('fastest unit (s)').onChange(live('unitTimeMin'));
+  ops.add(params, 'packers', PACKER_KINDS).name('packers (people / robot arms)').onChange(live('packers'));
+  ops.add(params, 'robotUnitTime', 1, 10, 0.1).name('robot sec / unit (mean)').onChange(live('robotUnitTime'));
+  ops.add(params, 'robotUnitTimeCv', 0, 0.5, 0.01).name('robot spread (σ/μ)').onChange(live('robotUnitTimeCv'));
+  ops.add(params, 'robotUnitTimeMin', 0.5, 6, 0.1).name('robot fastest unit (s)').onChange(live('robotUnitTimeMin'));
   ops.add(params, 'supportStaffRatio', 0, 2, 0.05).name('support h / packer h').onChange(live('supportStaffRatio'));
   ops.add(params, 'boxHandlingTime', 0, 15, 0.5).name('sec / box visit').onChange(live('boxHandlingTime'));
   ops.add(params, 'inductInterval', 0.5, 10, 0.1).name('induct interval s').onChange(live('inductInterval'));
@@ -259,10 +263,11 @@ async function main() {
     const u = recentUtil();
     const meanU = u.reduce((a, b) => a + b, 0) / Math.max(1, u.length);
     hud.innerHTML = `<h1><b>kurvi</b> packing loop · ${clock(sim.t)} · ${params.paused ? 'paused' : params.speed + '×'}</h1>
-      <div class="big">${fmt(s.uphPerPackerRecent)} <small>UPH per packer (10 min)</small></div>
+      <div class="big">${s.humanStations ? `${fmt(s.uphPerPackerRecent)} <small>UPH per packer (10 min)</small>` : `${fmt(s.uphPerRobotRecent)} <small>UPH per robot arm (10 min)</small>`}</div>
+      ${s.robotStations && s.humanStations ? `<div>${fmt(s.uphPerRobotRecent)} <small>UPH per robot arm</small></div>` : ''}
       <table>
       <tr><td>Warehouse UPH (incl. support)</td><td>${fmt(s.uphWarehouseRecent)} <span class="muted">· industry ≈ 300</span></td></tr>
-      <tr><td>Line output</td><td>${fmt(s.lineUphRecent)} units/h · ${sim.cfg.stations} packers</td></tr>
+      <tr><td>Line output</td><td>${fmt(s.lineUphRecent)} units/h · ${s.robotStations ? `${s.humanStations} packers + ${s.robotStations} robots` : `${sim.cfg.stations} packers`}</td></tr>
       <tr><td>Units packed</td><td>${fmt(s.unitsPacked)}</td></tr>
       <tr><td>Orders in / shipped</td><td>${fmt(s.ordersArrived)} / ${fmt(s.ordersShipped)}</td></tr>
       <tr><td>Boxes in loop / waiting</td><td>${s.boxesInSystem} / ${s.boxesWaiting}</td></tr>
@@ -304,8 +309,10 @@ async function main() {
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  // URL options: ?warm=1800 (pre-run seconds), ?view=station|loop|dock, ?speed=10
+  // URL options: ?warm=1800 (pre-run seconds), ?view=station|loop|dock, ?speed=10, ?packers=robot|mixed
   const q = new URLSearchParams(location.search);
+  const packersParam = q.get('packers') as SimConfig['packers'] | null;
+  if (packersParam && PACKER_KINDS.includes(packersParam)) params.packers = packersParam;
   start();
   const warm = Number(q.get('warm') ?? 0);
   if (q.get('speed')) params.speed = Number(q.get('speed'));

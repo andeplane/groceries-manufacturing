@@ -1,9 +1,10 @@
 import * as THREE from 'three';
-import { Loc, ROUTE_NAMES, type Box, type Product, type Simulation } from '../core';
+import { Loc, ROUTE_NAMES, isRobotStation, type Box, type Product, type Simulation } from '../core';
 import { buildFactory, cellPoint, BELT_Y, type Factory } from './factory';
 import { ProductLayer, productMaterial, type ProductLook } from '../products3d';
 import { cardboardTexture, labelTexture } from './textures';
-import { Worker } from './worker';
+import { Worker, type Packer, type PackerPoseCtx } from './worker';
+import { Robot, RobotKit } from './robot';
 
 export const BOX_L = 0.56;
 export const BOX_W = 0.38;
@@ -28,6 +29,10 @@ export class World {
   private boxProducts: ProductLayer;
   private rackProducts: ProductLayer;
   private workers: Worker[] = [];
+  private robots: Robot[] = [];
+  /** Per station: product id → rack slot index. */
+  private slotOf: Map<number, number>[] = [];
+  private poseCtx: PackerPoseCtx = { simT: 0, pick: new THREE.Vector3(), place: new THREE.Vector3(), carryHalf: new THREE.Vector3() };
   private prev = new Map<number, Pose>();
   private cur = new Map<number, Pose>();
   private dockIndex = new Map<number, number>();
@@ -38,6 +43,10 @@ export class World {
   private tmpM2 = new THREE.Matrix4();
   private tmpQ = new THREE.Quaternion();
   private tmpV = new THREE.Vector3();
+  private tmpV2 = new THREE.Vector3();
+  private carryQ = new THREE.Quaternion();
+  private carryS = new THREE.Vector3();
+  private idleCtx: PackerPoseCtx = { simT: 0 };
   private tmpS = new THREE.Vector3();
   private up = new THREE.Vector3(0, 1, 0);
   private boxMats: THREE.Material[];
@@ -65,13 +74,19 @@ export class World {
     this.root.add(this.boxProducts.group, this.rackProducts.group);
     this.fillRacks();
 
+    // Each station has both a person and a robot arm; `packers` (live) decides which one is shown.
+    const kit = new RobotKit();
     sim.layout.stations.forEach((g, i) => {
       const w = new Worker(i);
-      w.root.position.set(g.worker.x, 0, g.worker.z);
-      // Local +x of the worker faces the loop.
-      w.baseYaw = Math.atan2(g.normal.z, -g.normal.x);
+      const r = new Robot(i, kit);
+      for (const p of [w, r]) {
+        p.root.position.set(g.worker.x, 0, g.worker.z);
+        // Local +x of the packer faces the loop.
+        p.baseYaw = Math.atan2(g.normal.z, -g.normal.x);
+        this.root.add(p.root);
+      }
       this.workers.push(w);
-      this.root.add(w.root);
+      this.robots.push(r);
     });
     this.snapshot(true);
   }
@@ -113,11 +128,24 @@ export class World {
     return l;
   }
 
+  /** The packer model shown at station i (people or robot arms, per the live `packers` option). */
+  private packer(i: number): Packer {
+    const robot = isRobotStation(this.sim.cfg, i);
+    const w = this.workers[i];
+    const r = this.robots[i];
+    w.root.visible = !robot;
+    r.root.visible = robot;
+    return robot ? r : w;
+  }
+
   private fillRacks() {
     const sim = this.sim;
     this.rackProducts.begin();
     sim.slotting.productsAt.forEach((ids, s) => {
       const sv = this.factory.stations[s];
+      const map = new Map<number, number>();
+      ids.forEach((id, k) => map.set(id, k < sv.slots.length ? k : id % sv.slots.length));
+      this.slotOf[s] = map;
       const q = new THREE.Quaternion().setFromAxisAngle(this.up, sv.rackYaw);
       ids.slice(0, sv.slots.length).forEach((id, k) => {
         const p = sim.catalog.byId.get(id)!;
@@ -289,9 +317,12 @@ export class World {
       }
     }
 
-    // Workers + carried products + stack lights.
+    // Packers (people or robot arms) + carried products + stack lights.
+    const ctx = this.poseCtx;
+    ctx.simT = T;
+    this.idleCtx.simT = T;
     for (const st of sim.stations) {
-      const w = this.workers[st.index];
+      const w = this.packer(st.index);
       const sv = this.factory.stations[st.index];
       let phase = -1;
       let carried: number | null = null;
@@ -313,23 +344,33 @@ export class World {
         }
         if (phase < 0 && T < st.packEnd + 0.8) phase = 2;
       }
-      const hand = w.pose(phase, wall + st.index, this.tmpV);
-      if (carried !== null && phase > 0.38) {
-        const p = sim.catalog.byId.get(carried)!;
-        const boxPose = this.cur.get(box!.id);
-        const local = this.localFor(box!, carriedIdx);
-        this.tmpS.setFromMatrixScale(local);
-        if (phase > 0.85 && boxPose) {
-          // Lower into the box.
-          const f = (phase - 0.85) / 0.15;
-          this.tmpQ.setFromAxisAngle(this.up, boxPose.yaw);
-          this.tmpM2.compose(new THREE.Vector3(boxPose.x, boxPose.y, boxPose.z), this.tmpQ, new THREE.Vector3(1, 1, 1)).multiply(local);
-          const target = new THREE.Vector3().setFromMatrixPosition(this.tmpM2);
-          hand.lerp(target, f);
+      let product: Product | null = null;
+      const boxPose = box ? this.cur.get(box.id) : undefined;
+      if (carried !== null && boxPose) {
+        product = sim.catalog.byId.get(carried)!;
+        // Carried in the same orientation it will have in the box, so nothing pops on release.
+        this.tmpQ.setFromAxisAngle(this.up, boxPose.yaw);
+        this.tmpM2.compose(this.tmpV.set(boxPose.x, boxPose.y, boxPose.z), this.tmpQ, this.tmpS.set(1, 1, 1));
+        this.tmpM2.multiply(this.localFor(box!, carriedIdx));
+        this.tmpM2.decompose(this.tmpV, this.carryQ, this.carryS);
+        // Its centre once placed, and its half extents along the world axes.
+        ctx.place!.set(0, 0.5, 0).applyMatrix4(this.tmpM2);
+        const e = this.tmpM.makeRotationFromQuaternion(this.carryQ).elements;
+        const hs = this.carryS;
+        for (let r = 0; r < 3; r++) {
+          ctx.carryHalf!.setComponent(r, 0.5 * (Math.abs(e[r]) * hs.x + Math.abs(e[r + 4]) * hs.y + Math.abs(e[r + 8]) * hs.z));
         }
-        this.tmpQ.setFromAxisAngle(this.up, w.baseYaw);
-        this.tmpM.compose(hand.clone().add(new THREE.Vector3(0, -this.tmpS.y / 2, 0)), this.tmpQ, this.tmpS);
-        this.boxProducts.add(this.look(p), this.tmpM);
+        // Where it comes from: its slot on the rack.
+        const slot = sv.slots[this.slotOf[st.index]?.get(carried) ?? 0];
+        ctx.pick!.set(slot.pos.x, slot.pos.y + Math.min(slot.maxH, product.h / 100) / 2, slot.pos.z);
+      }
+      const hand = w.pose(phase, wall + st.index, this.tmpV, product ? ctx : this.idleCtx);
+      if (product && phase > w.grabPhase) {
+        if (phase > 0.85) hand.lerp(ctx.place!, (phase - 0.85) / 0.15); // lower it into the box
+        // `hand` is the product's centre; the mesh origin is its bottom centre.
+        const centre = this.tmpV2.set(0, this.carryS.y / 2, 0).applyQuaternion(this.carryQ);
+        this.tmpM.compose(hand.sub(centre), this.carryQ, this.carryS);
+        this.boxProducts.add(this.look(product), this.tmpM);
       }
       const packing = !!box && T < st.packEnd;
       const blocked = !!box && T > st.packEnd + 2;
