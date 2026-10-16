@@ -41,6 +41,7 @@ export class CameraRig {
   private ray = new THREE.Raycaster();
   private floor = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private lastWheel = 0;
+  private tween: { fromPos: THREE.Vector3; fromTgt: THREE.Vector3; toPos: THREE.Vector3; toTgt: THREE.Vector3; t: number; dur: number } | null = null;
 
   constructor(
     readonly camera: THREE.PerspectiveCamera,
@@ -82,6 +83,7 @@ export class CameraRig {
       'wheel',
       (e) => {
         if (this.mode !== 'orbit') return;
+        this.tween = null;
         const now = performance.now();
         if (now - this.lastWheel > 250) this.repivot(e.clientX, e.clientY, false);
         this.lastWheel = now;
@@ -91,6 +93,7 @@ export class CameraRig {
     dom.addEventListener(
       'pointerdown',
       (e) => {
+        this.tween = null;
         if (this.mode === 'orbit' && e.button === 0 && e.pointerType === 'mouse') {
           const r = dom.getBoundingClientRect();
           this.repivot(r.left + r.width / 2, r.top + r.height / 2, true);
@@ -171,9 +174,21 @@ export class CameraRig {
     return this.ray.ray.intersectPlane(this.floor, new THREE.Vector3());
   }
 
-  /** Point the orbit camera (switching back from walk mode if needed). */
-  look(position: THREE.Vector3Like, target: THREE.Vector3Like): void {
+  /** Point the orbit camera (switching back from walk mode if needed), optionally flying there over `seconds`. */
+  look(position: THREE.Vector3Like, target: THREE.Vector3Like, seconds = 0): void {
     if (this.mode === 'walk') this.setMode('orbit');
+    if (seconds > 0) {
+      this.tween = {
+        fromPos: this.camera.position.clone(),
+        fromTgt: this.orbit.target.clone(),
+        toPos: new THREE.Vector3().copy(position),
+        toTgt: new THREE.Vector3().copy(target),
+        t: 0,
+        dur: seconds,
+      };
+      return;
+    }
+    this.tween = null;
     this.orbit.target.copy(target);
     this.camera.position.copy(position);
     this.orbit.update();
@@ -181,6 +196,20 @@ export class CameraRig {
 
   update(dt: number): void {
     const k = this.keys;
+    if (this.tween) {
+      // Any key or pointer input takes over from a camera flight.
+      if (k.size > 0 || this.drag) this.tween = null;
+      else {
+        const tw = this.tween;
+        tw.t = Math.min(1, tw.t + dt / tw.dur);
+        const e = tw.t < 0.5 ? 4 * tw.t ** 3 : 1 - (-2 * tw.t + 2) ** 3 / 2;
+        this.camera.position.lerpVectors(tw.fromPos, tw.toPos, e);
+        this.orbit.target.lerpVectors(tw.fromTgt, tw.toTgt, e);
+        if (tw.t >= 1) this.tween = null;
+        this.orbit.update();
+        return;
+      }
+    }
     const speedUp = k.has('Shift') ? RUN_FACTOR : 1;
     const turnX = (k.has('ArrowLeft') ? 1 : 0) - (k.has('ArrowRight') ? 1 : 0);
     const turnY = (k.has('ArrowUp') ? 1 : 0) - (k.has('ArrowDown') ? 1 : 0);

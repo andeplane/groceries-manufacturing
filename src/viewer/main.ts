@@ -10,6 +10,7 @@ import { World } from './world';
 import { ZONE_COLOR } from './factory';
 import { drawChart } from './chart';
 import { CameraRig } from './camera';
+import { TOUR_STEPS, Tour, tourSeen } from './tutorial';
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -100,27 +101,41 @@ async function main() {
   };
 
   const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+  /** Seconds the next camera move takes (0 = jump). */
+  let flight = 0;
   const views = {
     overview: () => {
       const b = sim.layout.bounds;
       const span = b.maxX - b.minX;
       const fit = (span * 0.5) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / camera.aspect;
       const cx = (b.minX + b.maxX) / 2;
-      rig.look(V(cx, fit * 0.72, 1 + fit * 0.62), V(cx, 0, 1));
+      rig.look(V(cx, fit * 0.72, 1 + fit * 0.62), V(cx, 0, 1), flight);
     },
     station: () => {
       const g = sim.layout.stations[3];
       const p = g.inLane[g.inLane.length - 1];
-      rig.look(V(p.x + g.tangent.x * 2.2 - g.normal.x * 3.2, 2.6, p.z + g.tangent.z * 2.2 - g.normal.z * 3.2), V(p.x, 1.0, p.z));
+      rig.look(V(p.x + g.tangent.x * 2.2 - g.normal.x * 3.2, 2.6, p.z + g.tangent.z * 2.2 - g.normal.z * 3.2), V(p.x, 1.0, p.z), flight);
     },
     loop: () => {
-      rig.look(V(-sim.layout.straight / 2 - 2, 4.5, sim.layout.radius + 7), V(0, 0.8, 0));
+      rig.look(V(-sim.layout.straight / 2 - 2, 4.5, sim.layout.radius + 7), V(0, 0.8, 0), flight);
+    },
+    induct: () => {
+      const p = sim.layout.inductLane[2];
+      rig.look(V(p.x + 5, 4.2, p.z + 6), V(p.x - 0.5, 0.8, p.z), flight);
     },
     dock: () => {
       const d = sim.layout.docks[Math.floor(sim.layout.docks.length / 2)].door;
-      rig.look(V(d.x + 14, 9, d.z + 12), V(d.x + 3, 0.5, d.z));
+      rig.look(V(d.x + 14, 9, d.z + 12), V(d.x + 3, 0.5, d.z), flight);
     },
   };
+  const flyTo = (name: string, seconds = 1.6) => {
+    const f = views[name as keyof typeof views];
+    if (!f) return;
+    flight = seconds;
+    f();
+    flight = 0;
+  };
+  const tour = new Tour(TOUR_STEPS, (v) => flyTo(v));
 
   // ---------- GUI ----------
   const gui = new GUI({ title: 'Kurvi packing loop' });
@@ -154,10 +169,20 @@ async function main() {
   lay.add(params, 'seed', 1, 999, 1);
   lay.add({ restart: () => start() }, 'restart').name('↻ Restart with these');
   const cam = gui.addFolder('Camera');
-  cam.add(views, 'overview').name('Overview');
-  cam.add(views, 'station').name('Packing station');
-  cam.add(views, 'loop').name('Loop curve');
-  cam.add(views, 'dock').name('Dock & trucks');
+  const camButtons = {
+    tutorial: () => tour.open(),
+    overview: () => flyTo('overview', 1.2),
+    induct: () => flyTo('induct', 1.2),
+    station: () => flyTo('station', 1.2),
+    loop: () => flyTo('loop', 1.2),
+    dock: () => flyTo('dock', 1.2),
+  };
+  cam.add(camButtons, 'tutorial').name('▶ Tutorial');
+  cam.add(camButtons, 'overview').name('Overview');
+  cam.add(camButtons, 'induct').name('Box erector');
+  cam.add(camButtons, 'station').name('Packing station');
+  cam.add(camButtons, 'loop').name('Loop');
+  cam.add(camButtons, 'dock').name('Dock & trucks');
   const camState = { walk: false };
   const walkCtl = cam.add(camState, 'walk').name('Walk mode (M)').onChange((on: boolean) => rig.setMode(on ? 'walk' : 'orbit'));
   const hint = document.createElement('div');
@@ -307,6 +332,9 @@ async function main() {
   (v && views[v] ? views[v] : views.overview)();
   gui.controllersRecursive().forEach((c) => c.updateDisplay());
   loading.remove();
+  // First visit: start the guided tour (skipped for deep links like ?view= or ?warm=, forced with ?tour=1).
+  const tourParam = q.get('tour');
+  if (tourParam === '1' || (tourParam !== '0' && !v && !warm && !tourSeen())) tour.open();
   (window as unknown as Record<string, unknown>).__app = { get sim() { return sim; }, get world() { return world; }, rig };
 
   // ---------- loop ----------
