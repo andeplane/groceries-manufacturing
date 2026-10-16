@@ -49,7 +49,7 @@ async function main() {
   const rig = new CameraRig(camera, canvas, () => {
     const b = sim.layout.bounds;
     return { minX: sim.layout.docks[0].door.x + 0.6, maxX: b.maxX + 7.4, minZ: b.minZ - 7.4, maxZ: b.maxZ + 12 };
-  });
+  }, () => world?.root ?? null);
 
   const params = {
     speed: 4,

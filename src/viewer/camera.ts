@@ -38,16 +38,22 @@ export class CameraRig {
   private right = new THREE.Vector3();
   private readonly up = new THREE.Vector3(0, 1, 0);
 
+  private ray = new THREE.Raycaster();
+  private floor = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  private lastWheel = 0;
+
   constructor(
     readonly camera: THREE.PerspectiveCamera,
-    dom: HTMLElement,
+    private dom: HTMLElement,
     private walkArea: () => WalkArea,
+    /** What the orbit pivot can snap to (falls back to the floor plane). */
+    private pickRoot: () => THREE.Object3D | null = () => null,
   ) {
     this.orbit = new OrbitControls(camera, dom);
     this.orbit.enableDamping = true;
     this.orbit.zoomToCursor = true;
     this.orbit.maxPolarAngle = Math.PI * 0.49;
-    this.orbit.minDistance = 1.5;
+    this.orbit.minDistance = 0.6;
     this.orbit.maxDistance = 260;
 
     window.addEventListener('keydown', (e) => {
@@ -70,6 +76,28 @@ export class CameraRig {
     });
     window.addEventListener('blur', () => this.keys.clear());
 
+    // Before OrbitControls sees a wheel or rotate gesture, put the pivot on a real surface:
+    // zoom heads for whatever is under the cursor, rotation turns around what is in the middle of the view.
+    dom.addEventListener(
+      'wheel',
+      (e) => {
+        if (this.mode !== 'orbit') return;
+        const now = performance.now();
+        if (now - this.lastWheel > 250) this.repivot(e.clientX, e.clientY, false);
+        this.lastWheel = now;
+      },
+      { capture: true, passive: true },
+    );
+    dom.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (this.mode === 'orbit' && e.button === 0 && e.pointerType === 'mouse') {
+          const r = dom.getBoundingClientRect();
+          this.repivot(r.left + r.width / 2, r.top + r.height / 2, true);
+        }
+      },
+      { capture: true },
+    );
     dom.addEventListener('pointerdown', (e) => {
       if (this.mode !== 'walk') return;
       this.drag = { x: e.clientX, y: e.clientY };
@@ -110,6 +138,37 @@ export class CameraRig {
     this.mode = mode;
     this.drag = null;
     this.onModeChange(mode);
+  }
+
+  /**
+   * Move the orbit target along the current line of sight to the depth of the surface under (x, y), so the
+   * view doesn't jump. With `onSurface` (x, y is the screen centre) the target lands exactly on the surface.
+   */
+  private repivot(x: number, y: number, onSurface: boolean): void {
+    const hit = this.surfaceAt(x, y);
+    if (!hit) return;
+    const cam = this.camera;
+    cam.getWorldDirection(this.fwd);
+    const depth = this.v.subVectors(hit, cam.position).dot(this.fwd);
+    if (depth < 0.3) return;
+    if (onSurface) this.orbit.target.copy(hit);
+    else this.orbit.target.copy(cam.position).addScaledVector(this.fwd, depth);
+  }
+
+  private surfaceAt(x: number, y: number): THREE.Vector3 | null {
+    const r = this.dom.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1);
+    this.ray.setFromCamera(ndc, this.camera);
+    const root = this.pickRoot();
+    if (root) {
+      for (const h of this.ray.intersectObject(root, true)) {
+        if ((h.object as THREE.Sprite).isSprite) continue;
+        const m = (h.object as THREE.Mesh).material;
+        if (m && !Array.isArray(m) && !m.visible) continue;
+        return h.point;
+      }
+    }
+    return this.ray.ray.intersectPlane(this.floor, new THREE.Vector3());
   }
 
   /** Point the orbit camera (switching back from walk mode if needed). */
