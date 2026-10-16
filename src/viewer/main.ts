@@ -137,13 +137,15 @@ async function main() {
     const cz = (b.minZ + b.maxZ) / 2;
     rig.look(V(cx, h, cz + 0.01), V(cx, 0, cz));
   };
-  /** Stand next to the box erector, watching boxes come out onto the loop, in walk mode. */
+  /**
+   * Stand inside the west end of the loop facing the box erector: the curve and the erector lane on the right,
+   * boxes on the main belt heading off to the left. Continues in walk mode.
+   */
   const walkToErector = (seconds: number) => {
-    const il = sim.layout.inductLane;
-    const last = il[il.length - 1];
-    // Up the lane from the erector, off to one side: boxes come out of it towards the viewer.
-    const eye = V(last.x + 2.3, 1.65, last.z - 3.3);
-    const at = V(last.x - 0.3, 0.85, last.z + 0.3);
+    const L = sim.layout;
+    const xc = -L.straight / 2;
+    const eye = V(xc - 0.6, 1.65, -2.0);
+    const at = V(xc + 1.14, 0.99, 8.35);
     const d = at.clone().sub(eye);
     rig.walkTo(eye, Math.atan2(-d.x, -d.z), Math.atan2(d.y, Math.hypot(d.x, d.z)), seconds);
   };
