@@ -3,6 +3,7 @@ import { Loc, Simulation, SLOTTING_STRATEGIES, RELEASE_POLICIES, planBoxes } fro
 import { loadProducts } from '../src/cli/load';
 
 const products = loadProducts();
+const sim0 = () => new Simulation({ products });
 
 function invariants(sim: Simulation) {
   const seen = new Set<number>();
@@ -83,6 +84,53 @@ describe('simulation', () => {
         expect(s.utilization.every((u) => u >= 0 && u <= 1)).toBe(true);
       }
     }
+  });
+
+  it('runs robot and mixed packers deterministically, robots out-pick people', () => {
+    const run = (packers: 'human' | 'robot' | 'mixed') => {
+      const sim = new Simulation({ products, config: { seed: 3, packers, orderRate: 900 } });
+      sim.run(1800);
+      sim.resetMeasurement();
+      sim.run(1800);
+      return sim.stats();
+    };
+    const robot = run('robot');
+    expect(robot.unitsPacked).toBe(run('robot').unitsPacked);
+    expect(robot.robotStations).toBe(26);
+    expect(robot.humanStations).toBe(0);
+    expect(robot.uphPerPacker).toBe(0);
+    expect(robot.uphPerRobot).toBeGreaterThan(0);
+    expect(Number.isFinite(robot.uphWarehouse)).toBe(true);
+    const human = run('human');
+    expect(human.uphPerRobot).toBe(0);
+    expect(robot.unitsPacked).toBeGreaterThan(human.unitsPacked);
+    const mixed = run('mixed');
+    expect(mixed.robotStations).toBe(13);
+    expect(mixed.uphPerRobot).toBeGreaterThan(0);
+    expect(mixed.uphPerPacker).toBeGreaterThan(0);
+
+    // Per-unit time: the robot's truncated normal sits well below the human one.
+    const unitTimes = (packers: 'human' | 'robot') => {
+      const sim = new Simulation({ products, config: { seed: 5, packers }, events: true });
+      sim.run(1200);
+      const gaps: number[] = [];
+      for (const e of sim.drainEvents()) {
+        if (e.type !== 'pack') continue;
+        let prev = e.t + sim.cfg.boxHandlingTime * 0.4;
+        let prevId = -1;
+        for (const u of e.units) {
+          if (u.productId !== prevId) gaps.push(u.t - prev);
+          prev = u.t;
+          prevId = u.productId;
+        }
+      }
+      return gaps;
+    };
+    const hu = unitTimes('human');
+    const ro = unitTimes('robot');
+    const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
+    expect(mean(ro)).toBeLessThan(mean(hu));
+    expect(Math.min(...ro)).toBeGreaterThanOrEqual(sim0().cfg.robotUnitTimeMin - 1e-9);
   });
 
   it('category slotting clogs under a taco surge, spread does not', () => {
