@@ -1,6 +1,6 @@
 import { Rng } from './rng';
 import { makeCatalog, type Catalog, type Product, type Zone } from './catalog';
-import { DEFAULT_CONFIG, type SimConfig } from './config';
+import { DEFAULT_CONFIG, isRobotStation, type SimConfig } from './config';
 import { buildDemandModel, type DemandModel, type Order } from './demand';
 import { buildSlotting, type Slotting } from './slotting';
 import { planBoxes, type BoxItem } from './planner';
@@ -93,10 +93,20 @@ export interface SimStats {
   lineUph: number;
   /** Line UPH over the last 10 simulated minutes. */
   lineUphRecent: number;
-  /** Units per packer-hour (one packer per station). */
+  /** Units per packer-hour over the stations packed by people (0 when every station is a robot). */
   uphPerPacker: number;
   uphPerPackerRecent: number;
-  /** Units per productive warehouse hour incl. support staff — comparable to online grocers' published UPH. */
+  /** Units per robot-hour over the stations packed by robot arms (0 when there are none). */
+  uphPerRobot: number;
+  uphPerRobotRecent: number;
+  /** Stations packed by people / by robot arms (under the current `packers` setting). */
+  humanStations: number;
+  robotStations: number;
+  /**
+   * Units per productive warehouse hour: packer hours plus support hours (`supportStaffRatio` per station,
+   * since restocking and loading scale with stations, not with who packs) — comparable to online grocers'
+   * published UPH. Robots add no human hours.
+   */
   uphWarehouse: number;
   uphWarehouseRecent: number;
   ordersArrived: number;
@@ -182,7 +192,7 @@ export class Simulation {
   private stationAtDivert: Int32Array;
   private stationAtMerge: Int32Array;
   private recordEvents: boolean;
-  private recent: { t: number; units: number }[] = [];
+  private recent: { t: number; units: number; station: number }[] = [];
   private m!: Measure;
   private doorTrips: number[];
 
@@ -425,11 +435,14 @@ export class Simulation {
     st.packing = box;
     st.packStart = this.t;
     let tt = this.t + cfg.boxHandlingTime * 0.4;
+    const robot = isRobotStation(cfg, st.index);
     const units: PlacedUnit[] = [];
     for (const it of box.items) {
       if (it.station !== st.index) continue;
       for (let q = 0; q < it.qty; q++) {
-        const base = this.rng.truncNormal(cfg.unitTime, cfg.unitTime * cfg.unitTimeCv, cfg.unitTimeMin);
+        const base = robot
+          ? this.rng.truncNormal(cfg.robotUnitTime, cfg.robotUnitTime * cfg.robotUnitTimeCv, cfg.robotUnitTimeMin)
+          : this.rng.truncNormal(cfg.unitTime, cfg.unitTime * cfg.unitTimeCv, cfg.unitTimeMin);
         tt += q === 0 ? base : base * 0.5; // same product again is quicker
         units.push({ productId: it.productId, station: st.index, t: tt });
       }
@@ -444,7 +457,7 @@ export class Simulation {
     this.m.busy[st.index] += st.packEnd - st.packStart;
     this.m.units += units.length;
     this.m.stationUnits[st.index] += units.length;
-    this.recent.push({ t: st.packEnd, units: units.length });
+    this.recent.push({ t: st.packEnd, units: units.length, station: st.index });
     if (this.recordEvents) this.events.push({ type: 'pack', t: this.t, station: st.index, box, units, end: st.packEnd });
   }
 
@@ -583,7 +596,22 @@ export class Simulation {
     const win = 600;
     while (this.recent.length && this.recent[0].t < this.t - win) this.recent.shift();
     let recentUnits = 0;
-    for (const r of this.recent) if (r.t <= this.t) recentUnits += r.units;
+    let recentRobotUnits = 0;
+    for (const r of this.recent) {
+      if (r.t > this.t) continue;
+      recentUnits += r.units;
+      if (isRobotStation(this.cfg, r.station)) recentRobotUnits += r.units;
+    }
+    let robots = 0;
+    let robotUnits = 0;
+    for (let i = 0; i < n; i++) {
+      if (!isRobotStation(this.cfg, i)) continue;
+      robots++;
+      robotUnits += m.stationUnits[i];
+    }
+    const humans = n - robots;
+    const perHour = (units: number, span: number, count: number) => (span > 0 && count > 0 ? (units / span) * 3600 / count : 0);
+    const staffHours = humans + n * this.cfg.supportStaffRatio;
     const recentSpan = Math.min(win, this.t);
     const pct = (arr: number[], p: number) => {
       if (!arr.length) return 0;
@@ -599,10 +627,14 @@ export class Simulation {
       unitsPacked: m.units,
       lineUph: (m.units / secs) * 3600,
       lineUphRecent: recentSpan > 0 ? (recentUnits / recentSpan) * 3600 : 0,
-      uphPerPacker: (m.units / secs) * 3600 / n,
-      uphPerPackerRecent: recentSpan > 0 ? ((recentUnits / recentSpan) * 3600) / n : 0,
-      uphWarehouse: ((m.units / secs) * 3600) / (n * (1 + this.cfg.supportStaffRatio)),
-      uphWarehouseRecent: recentSpan > 0 ? ((recentUnits / recentSpan) * 3600) / (n * (1 + this.cfg.supportStaffRatio)) : 0,
+      uphPerPacker: perHour(m.units - robotUnits, secs, humans),
+      uphPerPackerRecent: perHour(recentUnits - recentRobotUnits, recentSpan, humans),
+      uphPerRobot: perHour(robotUnits, secs, robots),
+      uphPerRobotRecent: perHour(recentRobotUnits, recentSpan, robots),
+      humanStations: humans,
+      robotStations: robots,
+      uphWarehouse: perHour(m.units, secs, staffHours),
+      uphWarehouseRecent: perHour(recentUnits, recentSpan, staffHours),
       ordersArrived: this.ordersArrived,
       ordersShipped: m.ordersShipped,
       boxesInducted: this.boxesInducted,

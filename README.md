@@ -2,7 +2,7 @@
 
 A simulation of a grocery packing loop for Kurvi, a made-up online grocer. Orders come in, are split into boxes, the boxes
 ride a circulating conveyor past 26 packing stations, divert into a station's cache lane when they
-need products from it, get packed by a person, merge back, and leave for the dock where a truck for
+need products from it, get packed by a person (or a robot arm), merge back, and leave for the dock where a truck for
 their delivery area waits for its last box.
 
 - **Headless core** (`src/core`) — pure TypeScript, no DOM. Simulates a full shift in well under a
@@ -26,8 +26,24 @@ npm test
 
 Any config key works as a CLI flag (`--cacheSize 6 --slotting spread --theme taco …`).
 A guided tour plays on the first visit (replay it from Camera → Tutorial, or force it with `?tour=1`).
-Camera: scroll zooms to the cursor, WASD flies, Q/E or Space go down/up, arrow keys turn, Shift is faster, M toggles walk mode (drag to look, Esc to leave).
-Viewer URL options: `?warm=1800` (pre-run that many seconds), `?view=station|loop|dock`, `?speed=10`.
+The view opens looking straight down on the hall and then flies down next to the box erector in walk mode
+(after the tour on a first visit; deep links like `?view=station` skip this, `?intro=0` keeps the top view).
+
+Camera: drag rotates around the middle of the view, right-drag (or Shift-drag) moves over the floor, scroll zooms
+towards the cursor, WASD flies level, Q/E (or Space) move the camera down/up, arrow keys turn, Shift is faster.
+M toggles walk mode: click to capture the mouse and look around, WASD to walk, Esc to free the mouse (and again to leave).
+
+Click a box (or, walking, look at it and click) to see its order, where it is, what should be in it and what is packed so
+far, with the stations it visits as a checklist. *Follow* makes the camera ride along with it.
+Viewer URL options: `?warm=1800` (pre-run that many seconds), `?view=station|loop|dock`, `?speed=10`, `?packers=robot|mixed`.
+
+### Packers: people or robot arms
+
+`packers` (live, in Operations, or `--packers robot` on the CLI) chooses who packs: `human` (default),
+`robot` (a six-axis arm with a suction gripper at every station) or `mixed` (every other station is a robot).
+Robots pick at `robotUnitTime` (mean 3.2 s, σ 8 %, floor 2.4 s) instead of the human 4.5 s / 35 % / 2 s.
+*UPH per packer* then counts only the stations with people, *UPH per robot* the robot stations, and
+*warehouse UPH* divides by human hours only (packers plus support hours, which scale with stations).
 
 ## Model
 
@@ -35,7 +51,7 @@ Viewer URL options: `?warm=1800` (pre-run that many seconds), `?view=station|loo
 |---|---|
 | Conveyor | Cellular: the loop is a ring of cells (0.8 m: box + gap) that rotates one cell per tick (1.6 s at 0.5 m/s). Station in/out lanes are cell queues. |
 | Stations | Each station is a side track running parallel to the loop. A box transfers sideways onto it if its first cell is free (else it recirculates a full lap), queues up to the pack position (`cacheSize` cells), then moves on to the out-lane (`outLaneSize` cells) and transfers back onto the loop further downstream when an empty slot passes. |
-| Packing | Per unit: Gaussian pick+scan+place time (mean 4.5 s, σ 35 %, floor 2 s — the human limit), repeat units of the same product take half; plus 4 s per box visit. |
+| Packing | Per unit: Gaussian pick+scan+place time (mean 4.5 s, σ 35 %, floor 2 s — the human limit; robot arms 3.2 s, σ 8 %, floor 2.4 s), repeat units of the same product take half; plus 4 s per box visit. |
 | Demand | Orders ~1,250 NOK (lognormal). Baskets come from a Markov chain over categories built from meal clusters (breakfast, dinner, snacks, household, baking, grill) and Zipf popularity within each shelf. Themes (fredagstaco, grill, party) add bundles to a share of orders. |
 | Box planning | Boxes never mix ambient/chilled/frozen; volume/weight capped. `zone-fill` = fewest boxes, `station-aware` = fewest station stops. |
 | Slotting | Stations split by zone in proportion to demand. `random`, `category` (whole shelves together), `balanced` (greedy load balancing), `spread` (balanced + spread each sub-category across stations). |
