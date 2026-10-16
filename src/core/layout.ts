@@ -8,17 +8,20 @@ export interface P2 {
 
 export interface StationGeom {
   index: number;
-  /** Loop cell where boxes divert into the station's in-lane. */
+  /** Loop cell where boxes transfer sideways onto the station's side track. */
   divertCell: number;
-  /** Loop cell where finished boxes merge back. */
+  /** Loop cell where finished boxes transfer back onto the loop (downstream of the side track). */
   mergeCell: number;
   /** Unit vector pointing away from the loop (towards the worker). */
   normal: P2;
   /** Unit vector along the loop's direction of travel at the station. */
   tangent: P2;
-  /** Centre of in-lane cell i (0 = next to the loop, cacheSize-1 = pack position). */
+  /**
+   * Centre of in-lane cell i on the side track, which runs parallel to the loop
+   * (0 = just after the divert, cacheSize-1 = pack position).
+   */
   inLane: P2[];
-  /** Centre of out-lane cell j (0 = next to the loop). */
+  /** Centre of out-lane cell j, further along the side track (0 = last cell before the merge). */
   outLane: P2[];
   worker: P2;
   rack: P2;
@@ -40,21 +43,29 @@ export interface Layout {
   outboundPath: P2[];
   docks: { door: P2; lane: P2[] }[];
   bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
-  /** Distance from loop to spur start. */
-  spurOffset: number;
+  /** Distance between the loop centreline and a side track's centreline. */
+  sideOffset: number;
 }
 
-const SPUR_OFFSET = 0.9;
+const SIDE_OFFSET = 0.78;
 const MARGIN_CELLS = 2;
+
+/** Loop cells a station occupies: divert, side-track cells, merge, plus one cell gap. */
+export function stationFootprint(cfg: Pick<SimConfig, 'cacheSize' | 'outLaneSize'>): number {
+  return cfg.cacheSize + cfg.outLaneSize + 3;
+}
 
 /**
  * Build the loop: a stadium (two straights + two semicircles), travelling east along the south
- * straight and west along the north one. Stations hang off the outside of both straights.
+ * straight and west along the north one. Stations sit along the outside of both straights: each is a
+ * side track parallel to the loop. A box transfers sideways onto it at the divert cell, queues up to
+ * the pack position, then continues on the out-lane and transfers back onto the loop at the merge cell.
  */
 export function buildLayout(cfg: SimConfig): Layout {
   const perSouth = Math.ceil(cfg.stations / 2);
   const perNorth = cfg.stations - perSouth;
-  const straightCells = MARGIN_CELLS * 2 + Math.max(perSouth, perNorth) * cfg.stationSpacing;
+  const spacing = Math.max(cfg.stationSpacing, stationFootprint(cfg));
+  const straightCells = MARGIN_CELLS * 2 + Math.max(perSouth, perNorth) * spacing;
   const cellLength = cfg.cellLength;
   const straight = straightCells * cellLength;
   // Pick a radius that makes the curves a whole number of cells.
@@ -70,21 +81,22 @@ export function buildLayout(cfg: SimConfig): Layout {
     const south = k < perSouth;
     const local = south ? k : k - perSouth;
     const startCell = south ? 0 : straightCells + curveCells;
-    const divertCell = startCell + MARGIN_CELLS + local * cfg.stationSpacing;
-    const mergeCell = divertCell + 1;
+    const divertCell = startCell + MARGIN_CELLS + local * spacing;
+    const C = cfg.cacheSize;
+    const O = cfg.outLaneSize;
+    const mergeCell = divertCell + C + O + 1;
     const a = loop(divertCell);
-    const b = loop(mergeCell);
     const tangent = { x: south ? 1 : -1, z: 0 };
     const normal = { x: 0, z: south ? 1 : -1 };
+    const side = (along: number): P2 => ({
+      x: a.x + tangent.x * along * cellLength + normal.x * SIDE_OFFSET,
+      z: a.z + tangent.z * along * cellLength + normal.z * SIDE_OFFSET,
+    });
     const inLane: P2[] = [];
     const outLane: P2[] = [];
-    for (let i = 0; i < cfg.cacheSize; i++) {
-      const off = SPUR_OFFSET + i * cellLength;
-      inLane.push({ x: a.x + normal.x * off, z: a.z + normal.z * off });
-      outLane.push({ x: b.x + normal.x * off, z: b.z + normal.z * off });
-    }
-    const end = SPUR_OFFSET + cfg.cacheSize * cellLength;
-    const mid = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+    for (let i = 0; i < C; i++) inLane.push(side(i + 1));
+    for (let j = 0; j < O; j++) outLane.push(side(C + O - j));
+    const pack = inLane[C - 1];
     stations.push({
       index: k,
       divertCell,
@@ -93,8 +105,8 @@ export function buildLayout(cfg: SimConfig): Layout {
       tangent,
       inLane,
       outLane,
-      worker: { x: mid.x + normal.x * (end + 0.15), z: mid.z + normal.z * (end + 0.15) },
-      rack: { x: mid.x + normal.x * (end + 1.0), z: mid.z + normal.z * (end + 1.0) },
+      worker: { x: pack.x + normal.x * 0.72, z: pack.z + normal.z * 0.72 },
+      rack: { x: pack.x + normal.x * 1.6, z: pack.z + normal.z * 1.6 },
       side: south ? 'south' : 'north',
     });
   }
@@ -128,7 +140,7 @@ export function buildLayout(cfg: SimConfig): Layout {
     });
   }
 
-  const maxOut = SPUR_OFFSET + cfg.cacheSize * cellLength + 2.5;
+  const maxOut = SIDE_OFFSET + 1.6 + 2.5;
   const bounds = {
     minX: dockWallX - 9,
     maxX: straight / 2 + radius + 4,
@@ -151,7 +163,7 @@ export function buildLayout(cfg: SimConfig): Layout {
     outboundPath,
     docks,
     bounds,
-    spurOffset: SPUR_OFFSET,
+    sideOffset: SIDE_OFFSET,
   };
 }
 

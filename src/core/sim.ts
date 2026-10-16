@@ -200,7 +200,7 @@ export class Simulation {
       index: g.index,
       zone: this.slotting.stationZone[g.index],
       inLane: new Array(this.cfg.cacheSize).fill(null),
-      outLane: new Array(this.cfg.cacheSize).fill(null),
+      outLane: new Array(this.cfg.outLaneSize).fill(null),
       packing: null,
       packStart: 0,
       packEnd: 0,
@@ -287,6 +287,7 @@ export class Simulation {
 
     // Stations: move boxes out first so space frees up for incoming boxes.
     const C = cfg.cacheSize;
+    const O = cfg.outLaneSize;
     for (const st of this.stations) {
       const g = this.layout.stations[st.index];
       // a) merge out-lane head back onto the loop
@@ -302,7 +303,7 @@ export class Simulation {
         }
       }
       // b) advance out-lane towards the loop
-      for (let j = 1; j < C; j++) {
+      for (let j = 1; j < O; j++) {
         const b = st.outLane[j];
         if (b && !st.outLane[j - 1]) {
           st.outLane[j - 1] = b;
@@ -312,11 +313,11 @@ export class Simulation {
       }
       // c) finished box at the pack position moves to the out-lane
       const pk = st.packing;
-      if (pk && t >= st.packEnd && !st.outLane[C - 1]) {
+      if (pk && t >= st.packEnd && !st.outLane[O - 1]) {
         st.inLane[C - 1] = null;
-        st.outLane[C - 1] = pk;
+        st.outLane[O - 1] = pk;
         pk.loc = Loc.OutLane;
-        pk.cell = C - 1;
+        pk.cell = O - 1;
         st.packing = null;
         // Waiting longer than one conveyor tick for the out-lane counts as blocked.
         const blocked = Math.max(0, t - st.packEnd - this.dt);

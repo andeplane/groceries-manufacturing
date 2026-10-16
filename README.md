@@ -32,7 +32,7 @@ Viewer URL options: `?warm=1800` (pre-run that many seconds), `?view=station|loo
 | Piece | How it works |
 |---|---|
 | Conveyor | Cellular: the loop is a ring of cells (0.8 m: box + gap) that rotates one cell per tick (1.6 s at 0.5 m/s). Station in/out lanes are cell queues. |
-| Stations | Divert into the in-lane if its first cell is free (else the box recirculates a full lap). The last in-lane cell is the pack position; finished boxes move to the out-lane and merge back when an empty loop slot passes. |
+| Stations | Each station is a side track running parallel to the loop. A box transfers sideways onto it if its first cell is free (else it recirculates a full lap), queues up to the pack position (`cacheSize` cells), then moves on to the out-lane (`outLaneSize` cells) and transfers back onto the loop further downstream when an empty slot passes. |
 | Packing | Per unit: Gaussian pick+scan+place time (mean 4.5 s, σ 35 %, floor 2 s — the human limit), repeat units of the same product take half; plus 4 s per box visit. |
 | Demand | Orders ~1,250 NOK (lognormal). Baskets come from a Markov chain over categories built from meal clusters (breakfast, dinner, snacks, household, baking, grill) and Zipf popularity within each shelf. Themes (fredagstaco, grill, party) add bundles to a share of orders. |
 | Box planning | Boxes never mix ambient/chilled/frozen; volume/weight capped. `zone-fill` = fewest boxes, `station-aware` = fewest station stops. |

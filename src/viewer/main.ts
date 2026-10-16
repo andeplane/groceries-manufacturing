@@ -45,12 +45,12 @@ async function main() {
   sun.shadow.normalBias = 0.02;
   scene.add(sun, sun.target);
 
-  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 400);
+  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.3, 400);
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
   controls.maxPolarAngle = Math.PI * 0.49;
   controls.minDistance = 1.5;
-  controls.maxDistance = 140;
+  controls.maxDistance = 260;
 
   const params = {
     speed: 4,
@@ -91,7 +91,11 @@ async function main() {
     sc.top = span * 0.75;
     sc.bottom = -span * 0.75;
     sc.near = 1;
-    sc.far = 120;
+    sc.far = 40 + span * 1.5;
+    if (scene.fog instanceof THREE.Fog) {
+      scene.fog.near = span * 0.9;
+      scene.fog.far = span * 2.2;
+    }
     sc.updateProjectionMatrix();
     buildBars();
   };
@@ -99,8 +103,10 @@ async function main() {
   const views = {
     overview: () => {
       const b = sim.layout.bounds;
-      controls.target.set((b.minX + b.maxX) / 2 + 3, 0, 1);
-      camera.position.set((b.minX + b.maxX) / 2 + 3, 26, b.maxZ + 17);
+      const span = b.maxX - b.minX;
+      const fit = (span * 0.5) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / camera.aspect;
+      controls.target.set((b.minX + b.maxX) / 2, 0, 1);
+      camera.position.set((b.minX + b.maxX) / 2, fit * 0.72, 1 + fit * 0.62);
     },
     station: () => {
       const g = sim.layout.stations[3];
@@ -143,7 +149,8 @@ async function main() {
   const lay = gui.addFolder('Layout (restart)');
   lay.add(params, 'stations', 4, 40, 1).name('stations');
   lay.add(params, 'cacheSize', 1, 8, 1).name('cache boxes / station');
-  lay.add(params, 'stationSpacing', 2, 6, 1).name('station spacing (cells)');
+  lay.add(params, 'outLaneSize', 1, 4, 1).name('out-lane boxes / station');
+  lay.add(params, 'stationSpacing', 6, 14, 1).name('station spacing (cells)');
   lay.add(params, 'conveyorSpeed', 0.2, 1.5, 0.05).name('conveyor m/s');
   lay.add(params, 'slotting', SLOTTING_STRATEGIES).name('product slotting');
   lay.add(params, 'avgOrderValue', 300, 3000, 50).name('avg order NOK');

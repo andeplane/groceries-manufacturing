@@ -16,7 +16,9 @@ export interface SimConfig {
   stations: number;
   /** Boxes a station's in-lane can hold, including the one being packed. */
   cacheSize: number;
-  /** Loop cells between two neighbouring station diverts. */
+  /** Packed boxes a station's out-lane can hold while they wait to rejoin the loop. */
+  outLaneSize: number;
+  /** Loop cells between two neighbouring station diverts (at least the station's footprint). */
   stationSpacing: number;
   /** Length of one conveyor cell (box + gap) in metres. */
   cellLength: number;
@@ -81,7 +83,8 @@ export const DEFAULT_CONFIG: SimConfig = {
   seed: 1,
   stations: 26,
   cacheSize: 4,
-  stationSpacing: 3,
+  outLaneSize: 2,
+  stationSpacing: 9,
   cellLength: 0.8,
   conveyorSpeed: 0.5,
   slotting: 'balanced',
@@ -91,7 +94,7 @@ export const DEFAULT_CONFIG: SimConfig = {
   supportStaffRatio: 0.5,
   boxHandlingTime: 4,
   inductInterval: 1.6,
-  wipCap: 180,
+  wipCap: 300,
   release: 'trip-wave',
   boxing: 'zone-fill',
   orderRate: 440,
@@ -110,7 +113,7 @@ export const DEFAULT_CONFIG: SimConfig = {
 
 /** Keys that only take effect on restart. */
 export const RESTART_KEYS: readonly (keyof SimConfig)[] = [
-  'seed', 'stations', 'cacheSize', 'stationSpacing', 'cellLength', 'conveyorSpeed', 'slotting',
+  'seed', 'stations', 'cacheSize', 'outLaneSize', 'stationSpacing', 'cellLength', 'conveyorSpeed', 'slotting',
 ];
 
 export const ROUTE_NAMES = [

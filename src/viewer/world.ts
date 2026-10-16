@@ -190,12 +190,12 @@ export class World {
       case Loc.InLane: {
         const g = L.stations[box.station];
         const p = g.inLane[box.cell];
-        return { x: p.x, y: BELT_Y, z: p.z, yaw: Math.atan2(-g.normal.z, g.normal.x) };
+        return { x: p.x, y: BELT_Y, z: p.z, yaw: Math.atan2(-g.tangent.z, g.tangent.x) };
       }
       case Loc.OutLane: {
         const g = L.stations[box.station];
         const p = g.outLane[box.cell];
-        return { x: p.x, y: BELT_Y, z: p.z, yaw: Math.atan2(g.normal.z, -g.normal.x) };
+        return { x: p.x, y: BELT_Y, z: p.z, yaw: Math.atan2(-g.tangent.z, g.tangent.x) };
       }
       case Loc.Dock: {
         const trip = sim.trips.get(box.tripId);

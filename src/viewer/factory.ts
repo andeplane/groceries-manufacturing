@@ -15,6 +15,8 @@ export const ZONE_COLOR: Record<Zone, string> = {
 const BLUE = new THREE.MeshStandardMaterial({ color: 0x1f3fa8, roughness: 0.35, metalness: 0.5 });
 const STEEL = new THREE.MeshStandardMaterial({ color: 0xb8bcc2, roughness: 0.35, metalness: 0.85 });
 const DARK = new THREE.MeshStandardMaterial({ color: 0x3a3d42, roughness: 0.7, metalness: 0.4 });
+/** Flat floor markings: pulled towards the camera in depth so they never fight with the floor. */
+const DECAL = { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 } as const;
 const YELLOW = new THREE.MeshStandardMaterial({ color: 0xf2b705, roughness: 0.45, metalness: 0.3 });
 
 /** Collects conveyor parts as instances and builds a handful of InstancedMeshes. */
@@ -134,17 +136,20 @@ export function buildFactory(sim: Simulation): Factory {
   const cx = (b.minX + b.maxX) / 2;
   const cz = (b.minZ + b.maxZ) / 2;
 
-  // Floor
+  // Floor: the hall ends at the dock wall; outside it the apron takes over (no overlapping planes).
+  const hallMinX = layout.docks[0].door.x;
+  const hallMaxX = cx + W / 2;
+  const hallW = hallMaxX - hallMinX;
   const ft = floorTexture();
-  ft.repeat.set(W / 6, D / 6);
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({ map: ft, roughness: 0.62, metalness: 0.05 }));
+  ft.repeat.set(hallW / 6, D / 6);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(hallW, D), new THREE.MeshStandardMaterial({ map: ft, roughness: 0.62, metalness: 0.05 }));
   floor.rotation.x = -Math.PI / 2;
-  floor.position.set(cx, 0, cz);
+  floor.position.set((hallMinX + hallMaxX) / 2, 0, cz);
   floor.receiveShadow = true;
   root.add(floor);
 
   // Yellow walkway lines around the loop
-  const lineMat = new THREE.MeshBasicMaterial({ color: 0xf2c200 });
+  const lineMat = new THREE.MeshBasicMaterial({ color: 0xf2c200, ...DECAL });
   const addLine = (x0: number, z0: number, x1: number, z1: number) => {
     const len = Math.hypot(x1 - x0, z1 - z0);
     const m = new THREE.Mesh(new THREE.PlaneGeometry(len, 0.1), lineMat);
@@ -172,16 +177,27 @@ export function buildFactory(sim: Simulation): Factory {
   const stations: StationVisual[] = [];
   const rackParts: THREE.Matrix4[] = [];
   const shelfParts: THREE.Matrix4[] = [];
-  const zoneTiles: { p: P2; yaw: number; zone: Zone; len: number }[] = [];
+  const zoneTiles: { p: P2; yaw: number; zone: Zone; len: number; depth: number }[] = [];
   const hitMat = new THREE.MeshBasicMaterial({ visible: false });
   for (const g of layout.stations) {
     const n = g.normal;
-    const a = g.inLane[0];
-    const lastIn = g.inLane[g.inLane.length - 1];
-    const lastOut = g.outLane[g.outLane.length - 1];
-    const fromLoop = (p: P2) => ({ x: p.x - n.x * (layout.spurOffset - LOOP_WIDTH / 2 - 0.05), z: p.z - n.z * (layout.spurOffset - LOOP_WIDTH / 2 - 0.05) });
-    cb.addPath([fromLoop(a), { x: lastIn.x + n.x * 0.42, z: lastIn.z + n.z * 0.42 }], LANE_WIDTH);
-    cb.addPath([{ x: lastOut.x + n.x * 0.42, z: lastOut.z + n.z * 0.42 }, fromLoop(g.outLane[0])], LANE_WIDTH);
+    const t = g.tangent;
+    // Side track parallel to the loop, with short diagonal transfers off and back on.
+    const offLoop = (cell: number): P2 => {
+      const p = cellPoint(layout, cell);
+      return { x: p.x + n.x * (LOOP_WIDTH / 2 - 0.05), z: p.z + n.z * (LOOP_WIDTH / 2 - 0.05) };
+    };
+    const firstSide = g.inLane[0];
+    const lastSide = g.outLane[0];
+    cb.addPath(
+      [
+        offLoop(g.divertCell + 0.15),
+        { x: firstSide.x - t.x * 0.3, z: firstSide.z - t.z * 0.3 },
+        { x: lastSide.x + t.x * 0.3, z: lastSide.z + t.z * 0.3 },
+        offLoop(g.mergeCell - 0.15),
+      ],
+      LANE_WIDTH,
+    );
 
     // Rack behind the worker, facing the loop.
     const rack = g.rack;
@@ -190,7 +206,6 @@ export function buildFactory(sim: Simulation): Factory {
     const rw = 2.1;
     const rd = 0.5;
     const rh = 1.9;
-    const t = g.tangent;
     for (const s of [-1, 1]) {
       for (const dd of [-1, 1]) {
         rackParts.push(
@@ -225,8 +240,9 @@ export function buildFactory(sim: Simulation): Factory {
 
     // Stack light: green packing, yellow waiting for boxes, red blocked.
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.7), STEEL);
-    const lx = g.inLane[0].x + t.x * -0.45 + n.x * 0.2;
-    const lz = g.inLane[0].z + t.z * -0.45 + n.z * 0.2;
+    const pk = g.inLane[g.inLane.length - 1];
+    const lx = pk.x + t.x * 0.75 + n.x * 0.35;
+    const lz = pk.z + t.z * 0.75 + n.z * 0.35;
     pole.position.set(lx, BELT_Y + 0.35, lz);
     root.add(pole);
     const mkLight = (color: number, i: number) => {
@@ -243,13 +259,22 @@ export function buildFactory(sim: Simulation): Factory {
     label.position.set(rack.x, 2.35, rack.z);
     root.add(label);
 
-    const hit = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.2, layout.spurOffset + g.inLane.length * layout.cellLength + 1.6), hitMat);
-    hit.position.set((a.x + rack.x) / 2, 1.1, (a.z + rack.z) / 2);
+    // Footprint of the whole station (side track, worker, rack) for clicks and the zone tint.
+    const along0 = cellPoint(layout, g.divertCell);
+    const along1 = cellPoint(layout, g.mergeCell);
+    const len = Math.hypot(along1.x - along0.x, along1.z - along0.z) + 0.4;
+    const depth = layout.sideOffset + 2.0;
+    const centre = {
+      x: (along0.x + along1.x) / 2 + n.x * (depth / 2 + 0.2),
+      z: (along0.z + along1.z) / 2 + n.z * (depth / 2 + 0.2),
+    };
+    const hit = new THREE.Mesh(new THREE.BoxGeometry(len, 2.2, depth), hitMat);
+    hit.position.set(centre.x, 1.1, centre.z);
     hit.rotation.y = rackYaw;
     hit.userData.station = g.index;
     root.add(hit);
 
-    zoneTiles.push({ p: { x: (a.x + rack.x) / 2 + n.x * 0.3, z: (a.z + rack.z) / 2 + n.z * 0.3 }, yaw: rackYaw, zone, len: layout.spurOffset + g.inLane.length * layout.cellLength + 1.8 });
+    zoneTiles.push({ p: centre, yaw: rackYaw, zone, len, depth });
     stations.push({ light, hit, slots, rackYaw });
   }
   const rackMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), BLUE, rackParts.length);
@@ -266,8 +291,8 @@ export function buildFactory(sim: Simulation): Factory {
   for (const z of zoneTiles) {
     if (z.zone === 'ambient') continue;
     const m = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.3, z.len),
-      new THREE.MeshStandardMaterial({ color: ZONE_COLOR[z.zone], transparent: true, opacity: 0.28, roughness: 0.4, depthWrite: false }),
+      new THREE.PlaneGeometry(z.len, z.depth),
+      new THREE.MeshStandardMaterial({ color: ZONE_COLOR[z.zone], transparent: true, opacity: 0.28, roughness: 0.4, depthWrite: false, ...DECAL }),
     );
     m.rotation.x = -Math.PI / 2;
     m.rotation.z = z.yaw;
@@ -353,7 +378,7 @@ export function buildFactory(sim: Simulation): Factory {
   // Outside apron
   const apron = new THREE.Mesh(new THREE.PlaneGeometry(26, wallEnd - wallStart + 20), new THREE.MeshStandardMaterial({ color: 0x4a4d52, roughness: 0.95 }));
   apron.rotation.x = -Math.PI / 2;
-  apron.position.set(dockWallX - 13, 0.001, (wallStart + wallEnd) / 2);
+  apron.position.set(dockWallX - 13, -0.02, (wallStart + wallEnd) / 2);
   apron.receiveShadow = true;
   root.add(apron);
 
