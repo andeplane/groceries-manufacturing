@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import GUI from 'lil-gui';
 import {
-  BOXING_STRATEGIES, DEFAULT_CONFIG, RELEASE_POLICIES, ROUTE_NAMES, SLOTTING_STRATEGIES, THEMES, Simulation,
-  type Product, type SimConfig,
+  BOXING_STRATEGIES, DEFAULT_CONFIG, Loc, RELEASE_POLICIES, ROUTE_NAMES, SLOTTING_STRATEGIES, THEMES, Simulation,
+  type Box, type Product, type SimConfig,
 } from '../core';
 import { loadProductAtlas, probeMaxTextureSize } from './textures';
 import { World } from './world';
@@ -128,6 +128,25 @@ async function main() {
       rig.look(V(d.x + 14, 9, d.z + 12), V(d.x + 3, 0.5, d.z), flight);
     },
   };
+  /** Straight down over the whole hall. */
+  const topView = () => {
+    const b = sim.layout.bounds;
+    const w = Math.max(b.maxX - b.minX, (b.maxZ - b.minZ) * camera.aspect) + 8;
+    const h = (w * 0.5) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / camera.aspect;
+    const cx = (b.minX + b.maxX) / 2;
+    const cz = (b.minZ + b.maxZ) / 2;
+    rig.look(V(cx, h, cz + 0.01), V(cx, 0, cz));
+  };
+  /** Stand next to the box erector, watching boxes come out onto the loop, in walk mode. */
+  const walkToErector = (seconds: number) => {
+    const il = sim.layout.inductLane;
+    const last = il[il.length - 1];
+    // Up the lane from the erector, off to one side: boxes come out of it towards the viewer.
+    const eye = V(last.x + 2.3, 1.65, last.z - 3.3);
+    const at = V(last.x - 0.3, 0.85, last.z + 0.3);
+    const d = at.clone().sub(eye);
+    rig.walkTo(eye, Math.atan2(-d.x, -d.z), Math.atan2(d.y, Math.hypot(d.x, d.z)), seconds);
+  };
   const flyTo = (name: string, seconds = 1.6) => {
     const f = views[name as keyof typeof views];
     if (!f) return;
@@ -188,15 +207,53 @@ async function main() {
   const hint = document.createElement('div');
   hint.id = 'camhint';
   document.body.appendChild(hint);
+  const crosshair = document.createElement('div');
+  crosshair.id = 'crosshair';
+  document.body.appendChild(crosshair);
+  const controls = document.createElement('div');
+  controls.id = 'controls';
+  document.body.appendChild(controls);
+  const kbd = (k: string) => k.split(' ').map((x) => `<kbd>${x}</kbd>`).join('');
+  let controlsTimer = 0;
+  const shownControls = new Set<string>();
+  /** The key card in the middle of the screen: shown when a mode starts, then fades out. */
+  const showControls = (force = false) => {
+    const m = rig.mode;
+    if (!force && shownControls.has(m)) return;
+    shownControls.add(m);
+    controls.innerHTML = m === 'walk'
+      ? `<h3>Walking the floor</h3>
+        <div>${kbd('Click')} capture the mouse and look around</div>
+        <div>${kbd('W A S D')} walk · ${kbd('Shift')} run</div>
+        <div>Look at a box to see what it is, click to open it</div>
+        <div>${kbd('Esc')} free the mouse · ${kbd('M')} fly camera</div>`
+      : `<h3>Fly camera</h3>
+        <div>Drag to rotate · right-drag to move · scroll to zoom to the mouse</div>
+        <div>${kbd('W A S D')} fly · ${kbd('Q')}${kbd('E')} down / up · ${kbd('← →')} turn</div>
+        <div>Click a box or a station for details · ${kbd('M')} walk</div>`;
+    controls.classList.add('on');
+    clearTimeout(controlsTimer);
+    controlsTimer = window.setTimeout(() => controls.classList.remove('on'), 9000);
+  };
   const setHint = () => {
     hint.textContent = rig.mode === 'walk'
-      ? 'Walk: drag to look · WASD walk · arrows turn · Shift run · M / Esc back to orbit'
-      : 'Orbit: drag rotate · right-drag pan · scroll zooms to cursor · WASD fly · Q/E down/up · arrows turn · Shift faster · M walk';
+      ? (rig.locked ? 'Walk: mouse looks · WASD walk · Shift run · click a box to open it · Esc frees the mouse · M fly'
+        : 'Walk: click to capture the mouse · WASD walk · Shift run · M / Esc fly camera')
+      : 'Fly: drag rotate · right-drag move · scroll zooms to mouse · WASD fly · Q/E down/up · arrows turn · Shift faster · M walk';
+    crosshair.style.display = rig.mode === 'walk' ? 'block' : 'none';
   };
   rig.onModeChange = (m) => {
     camState.walk = m === 'walk';
     walkCtl.updateDisplay();
     setHint();
+    if (!rig.flying) showControls();
+  };
+  rig.onLockChange = (locked) => {
+    setHint();
+    if (locked) {
+      clearTimeout(controlsTimer);
+      controlsTimer = window.setTimeout(() => controls.classList.remove('on'), 2500);
+    }
   };
   setHint();
   if (window.innerWidth < 700) gui.close();
@@ -206,7 +263,8 @@ async function main() {
   const bars = document.getElementById('bars')!;
   const panel = document.getElementById('station')!;
   let barEls: HTMLElement[] = [];
-  let selected = -1;
+  /** What the side panel shows. Boxes are kept by reference: the sim updates them in place. */
+  let sel: { kind: 'station'; i: number } | { kind: 'box'; box: Box } | null = null;
   function buildBars() {
     bars.innerHTML = '<div class="legend">Station utilisation (10 min) · red = blocked · click for details</div>';
     barEls = sim.stations.map((st, i) => {
@@ -224,25 +282,127 @@ async function main() {
     const m = Math.floor((t % 3600) / 60);
     return `${String(h % 24).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   };
+  const esc = (x: string) => x.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
   function showStation(i: number) {
-    selected = i;
+    if (sel?.kind === 'box') rig.stopFollow();
+    sel = { kind: 'station', i };
     panel.style.display = 'block';
-    renderStation();
+    renderPanel();
   }
-  function renderStation() {
-    if (selected < 0) return;
-    const st = sim.stations[selected];
-    const ids = sim.slotting.productsAt[selected];
-    const util = recentUtil()[selected] ?? 0;
+  function showBox(box: Box) {
+    if (sel?.kind === 'box' && sel.box !== box) rig.stopFollow();
+    sel = { kind: 'box', box };
+    panel.style.display = 'block';
+    renderPanel();
+  }
+  function closePanel() {
+    sel = null;
+    panel.style.display = 'none';
+    rig.stopFollow();
+  }
+  const boxTarget = (box: Box) => () => (sim.boxes.has(box.id) && box.loc !== Loc.Shipped ? world?.boxPosition(box.id) ?? null : null);
+  function followBox(box: Box) {
+    const p = world?.boxPosition(box.id);
+    if (!p) return;
+    // Ride along from a little behind and above, on the side the camera is already on.
+    const off = camera.position.clone().sub(p).setY(0);
+    if (off.lengthSq() < 0.01) off.set(0, 0, 1);
+    off.setLength(2.6).setY(2.1);
+    rig.followFrom(boxTarget(box), off, 1.4);
+    renderPanel();
+  }
+  rig.onFollowEnd = () => renderPanel();
+  panel.addEventListener('click', (e) => {
+    const act = (e.target as HTMLElement).closest('[data-act]')?.getAttribute('data-act');
+    if (act === 'close') closePanel();
+    else if (act === 'follow' && sel?.kind === 'box') followBox(sel.box);
+    else if (act === 'unfollow') rig.stopFollow();
+    else if (act?.startsWith('station:')) showStation(Number(act.slice(8)));
+  });
+  let panelHtml = '';
+  function renderPanel() {
+    let html = '';
+    if (sel?.kind === 'station') html = stationHtml(sel.i);
+    else if (sel?.kind === 'box') html = boxHtml(sel.box);
+    // Only touch the DOM when something changed, so buttons don't vanish under the mouse.
+    if (html !== panelHtml) {
+      panelHtml = html;
+      panel.innerHTML = html;
+    }
+  }
+  function stationHtml(i: number): string {
+    const st = sim.stations[i];
+    const ids = sim.slotting.productsAt[i];
+    const util = recentUtil()[i] ?? 0;
     const lane = st.inLane.filter(Boolean).length;
-    panel.innerHTML = `<span class="x">✕</span><h2>Station ${selected + 1} · ${st.zone}</h2>
+    return `<span class="x" data-act="close">✕</span><h2>Station ${i + 1} · ${st.zone}</h2>
       ${fmt(util * 100)}% busy · ${st.units} units · ${st.boxes} boxes<br/>
       cache ${lane}/${sim.cfg.cacheSize} · ${ids.length} products slotted here<br/>
-      <ol>${ids.slice(0, 8).map((id) => `<li>${sim.catalog.byId.get(id)!.name}</li>`).join('')}</ol>`;
-    (panel.querySelector('.x') as HTMLElement).onclick = () => {
-      selected = -1;
-      panel.style.display = 'none';
-    };
+      <ol>${ids.slice(0, 8).map((id) => `<li>${esc(sim.catalog.byId.get(id)!.name)}</li>`).join('')}</ol>`;
+  }
+  /** Where a box is, in words. */
+  function boxStatus(box: Box): string {
+    if (!sim.boxes.has(box.id) || box.loc === Loc.Shipped) return 'Shipped';
+    const st = box.station >= 0 ? box.station + 1 : 0;
+    switch (box.loc) {
+      case Loc.Pending: return 'Waiting for the box erector';
+      case Loc.Loop: {
+        const next = box.remaining.length ? `heading for station ${box.remaining[0] + 1}` : 'complete, heading for the exit';
+        return `On the loop, ${next}${box.laps > 0 ? ` · lap ${box.laps + 1}` : ''}`;
+      }
+      case Loc.InLane: return sim.stations[box.station].packing === box && simClock >= sim.stations[box.station].packStart ? `Being packed at station ${st}` : `Queued at station ${st}`;
+      case Loc.OutLane: return `Packed at station ${st}, waiting to rejoin the loop`;
+      case Loc.Outbound: return 'On the conveyor to the dock';
+      case Loc.Dock: return `Stacked at door ${(sim.trips.get(box.tripId)?.door ?? 0) + 1}, waiting for the truck`;
+      default: return '';
+    }
+  }
+  function boxHtml(box: Box): string {
+    const T = simClock;
+    const packed = new Map<number, number>();
+    let done = 0;
+    for (const u of box.placed) {
+      if (u.t > T) continue;
+      packed.set(u.productId, (packed.get(u.productId) ?? 0) + 1);
+      done++;
+    }
+    const trip = sim.trips.get(box.tripId);
+    const route = trip ? ROUTE_NAMES[trip.route % ROUTE_NAMES.length] : '';
+    let siblings = 0;
+    let nth = 1;
+    for (const b of sim.boxes.values()) {
+      if (b.orderId !== box.orderId) continue;
+      siblings++;
+      if (b.id < box.id) nth++;
+    }
+    const here = (box.loc === Loc.InLane || box.loc === Loc.OutLane) ? box.station : -1;
+    // The plan: stations in the order the box meets them, each with what it should pick up there.
+    const byStation = new Map<number, typeof box.items>();
+    for (const it of box.items) {
+      if (!byStation.has(it.station)) byStation.set(it.station, []);
+      byStation.get(it.station)!.push(it);
+    }
+    const plan = [...byStation.entries()].sort((a, b) => a[0] - b[0]).map(([s, items]) => {
+      const need = items.reduce((a, it) => a + it.qty, 0);
+      const got = items.reduce((a, it) => a + Math.min(it.qty, packed.get(it.productId) ?? 0), 0);
+      const state = got >= need ? 'done' : s === here ? 'here' : 'todo';
+      const rows = items.map((it) => {
+        const n = Math.min(it.qty, packed.get(it.productId) ?? 0);
+        const p = sim.catalog.byId.get(it.productId)!;
+        return `<li class="${n >= it.qty ? 'done' : ''}"><span class="ck">${n >= it.qty ? '✓' : n > 0 ? '◐' : ''}</span>${esc(p.name)}<em>${n}/${it.qty}</em></li>`;
+      }).join('');
+      return `<li class="stop ${state}"><div class="sh" data-act="station:${s}"><span class="ck">${state === 'done' ? '✓' : state === 'here' ? '▶' : ''}</span>Station ${s + 1}<em>${got}/${need}</em></div><ul>${rows}</ul></li>`;
+    }).join('');
+    const following = rig.following;
+    const alive = sim.boxes.has(box.id) && box.loc !== Loc.Shipped;
+    return `<span class="x" data-act="close">✕</span>
+      <h2>Box ${box.id} <span class="chip" style="background:${ZONE_COLOR[box.zone]}">${box.zone}</span></h2>
+      <div>Order <b>#${box.orderId}</b>${siblings > 1 ? ` · box ${nth} of ${siblings} in the warehouse` : ''}${route ? ` · truck route ${esc(route)}` : ''}</div>
+      <div class="status">${boxStatus(box)}</div>
+      <div class="prog"><i style="width:${Math.round((done / Math.max(1, box.units)) * 100)}%"></i></div>
+      <div class="muted">${done} of ${box.units} items packed · ${box.items.length} products${box.missedDiverts ? ` · ${box.missedDiverts} full-station pass${box.missedDiverts > 1 ? 'es' : ''}` : ''}</div>
+      ${alive ? `<button type="button" class="btn" data-act="${following ? 'unfollow' : 'follow'}">${following ? '■ Stop following' : '▶ Follow this box'}</button>` : ''}
+      <h3>Plan</h3><ol class="plan">${plan}</ol>`;
   }
   function recentUtil(): number[] {
     if (utilHist.length < 2) return sim.stations.map(() => 0);
@@ -282,21 +442,83 @@ async function main() {
       (el.children[0] as HTMLElement).style.height = `${Math.round(Math.min(1, bl[i] ?? 0) * 100)}%`;
       el.title = `Station ${i + 1}: ${fmt(u[i] * 100)}% busy`;
     });
-    renderStation();
-    void ROUTE_NAMES;
+    renderPanel();
   }
 
   // ---------- picking ----------
   const ray = new THREE.Raycaster();
+  const centre = new THREE.Vector2(0, 0);
+  const mouse = { x: 0, y: 0, over: false, down: false };
   let downAt: { x: number; y: number } | null = null;
-  canvas.addEventListener('pointerdown', (e) => (downAt = { x: e.clientX, y: e.clientY }));
-  canvas.addEventListener('pointerup', (e) => {
-    if (!downAt || Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 5 || !world) return;
-    const ndc = new THREE.Vector2((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
+  const pickAt = (ndc: THREE.Vector2) => {
+    if (!world) return;
     ray.setFromCamera(ndc, camera);
+    const box = world.pickBox(ray);
+    if (box) return showBox(box);
     const s = world.pickStation(ray);
     if (s >= 0) showStation(s);
+  };
+  canvas.addEventListener('pointerdown', (e) => {
+    downAt = { x: e.clientX, y: e.clientY };
+    mouse.down = true;
   });
+  canvas.addEventListener('pointerup', (e) => {
+    mouse.down = false;
+    if (!downAt || Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 5 || e.button !== 0) return;
+    // In walk mode a click captures the mouse; with it captured, clicks act on the crosshair (onActivate).
+    if (rig.mode === 'walk') return;
+    pickAt(new THREE.Vector2((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1));
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+    mouse.over = true;
+  });
+  canvas.addEventListener('pointerleave', () => (mouse.over = false));
+  rig.onActivate = () => pickAt(centre);
+
+  // Hover (or, walking, whatever is in the crosshair): a small label that sticks to the box.
+  const tip = document.createElement('div');
+  tip.id = 'boxtip';
+  document.body.appendChild(tip);
+  let hovered: Box | null = null;
+  let lastHover = 0;
+  const tipPos = new THREE.Vector3();
+  function updateHover(now: number) {
+    if (!world) return;
+    if (now - lastHover > 90) {
+      lastHover = now;
+      hovered = null;
+      if (rig.mode === 'walk') {
+        ray.setFromCamera(centre, camera);
+        const b = world.pickBox(ray);
+        if (b && ray.ray.origin.distanceTo(world.boxPosition(b.id, tipPos) ?? ray.ray.origin) < 9) hovered = b;
+      } else if (mouse.over && !mouse.down) {
+        ray.setFromCamera(new THREE.Vector2((mouse.x / window.innerWidth) * 2 - 1, -(mouse.y / window.innerHeight) * 2 + 1), camera);
+        hovered = world.pickBox(ray);
+      }
+      crosshair.classList.toggle('hit', !!hovered);
+      canvas.style.cursor = hovered && rig.mode === 'orbit' ? 'pointer' : '';
+      if (hovered) {
+        const done = hovered.placed.filter((u) => u.t <= simClock).length;
+        tip.innerHTML = `<b>Box ${hovered.id}</b> · order #${hovered.orderId}<br/>${done}/${hovered.units} items · ${boxStatus(hovered).replace(/^On the loop, /, '')}${rig.mode === 'walk' ? '<br/><span class="muted">click to open</span>' : ''}`;
+      }
+    }
+    const p = hovered && world.boxPosition(hovered.id, tipPos);
+    if (!p) {
+      tip.style.display = 'none';
+      return;
+    }
+    p.y += 0.12;
+    p.project(camera);
+    if (p.z > 1) {
+      tip.style.display = 'none';
+      return;
+    }
+    tip.style.display = 'block';
+    tip.style.left = `${((p.x + 1) / 2) * window.innerWidth}px`;
+    tip.style.top = `${((1 - p.y) / 2) * window.innerHeight}px`;
+  }
 
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -329,13 +551,36 @@ async function main() {
     simClock = sim.t;
   }
   const v = q.get('view') as keyof typeof views | null;
-  (v && views[v] ? views[v] : views.overview)();
   gui.controllersRecursive().forEach((c) => c.updateDisplay());
   loading.remove();
-  // First visit: start the guided tour (skipped for deep links like ?view= or ?warm=, forced with ?tour=1).
+  // Deep links (?view=...) go straight there. Otherwise start looking straight down on the hall, then
+  // dive down next to the box erector in walk mode. First visit: the guided tour comes first (forced
+  // with ?tour=1, skipped with ?tour=0); the dive follows when it closes. ?intro=0 skips the dive.
   const tourParam = q.get('tour');
-  if (tourParam === '1' || (tourParam !== '0' && !v && !warm && !tourSeen())) tour.open();
-  (window as unknown as Record<string, unknown>).__app = { get sim() { return sim; }, get world() { return world; }, rig };
+  const intro = q.get('intro') !== '0';
+  // Landing in walk mode brings up the key card (onModeChange).
+  const dive = () => walkToErector(4.2);
+  if (v && views[v]) views[v]();
+  else {
+    topView();
+    if (tourParam === '1' || (tourParam !== '0' && !warm && !tourSeen())) {
+      tour.onClose = () => {
+        tour.onClose = () => {};
+        if (intro) dive();
+      };
+      tour.open();
+    } else if (intro) {
+      // Hold the top view for a moment, unless someone grabs the camera first.
+      let touched = false;
+      const touch = () => (touched = true);
+      canvas.addEventListener('pointerdown', touch, { once: true });
+      canvas.addEventListener('wheel', touch, { once: true, passive: true });
+      window.addEventListener('keydown', touch, { once: true });
+      window.setTimeout(() => (touched ? showControls(true) : dive()), 1500);
+    }
+  }
+  if (tourParam === '1' && v) tour.open();
+  (window as unknown as Record<string, unknown>).__app = { get sim() { return sim; }, get world() { return world; }, rig, camera, showBox, followBox };
 
   // ---------- loop ----------
   const timer = new THREE.Clock();
@@ -372,6 +617,7 @@ async function main() {
     rig.update(dtw);
     renderer.render(scene, camera);
     updateHud(performance.now());
+    updateHover(performance.now());
   });
 }
 

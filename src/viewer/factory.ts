@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { loopCellPoint, type Layout, type P2, type Simulation, type Zone } from '../core';
+import { loopCellPoint, type Layout, type P2, type Simulation, type StationGeom, type Zone } from '../core';
 import { floorTexture, labelTexture, truckTexture } from './textures';
 
 export const BELT_Y = 0.8;
@@ -19,6 +19,15 @@ const DARK = new THREE.MeshStandardMaterial({ color: 0x3a3d42, roughness: 0.7, m
 const DECAL = { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 } as const;
 const YELLOW = new THREE.MeshStandardMaterial({ color: 0xf2b705, roughness: 0.45, metalness: 0.3 });
 
+interface PathOptions {
+  closed?: boolean;
+  y?: number;
+  /** Drop rail pieces whose centre fails this test (where belts join). */
+  keepRail?: (p: P2) => boolean;
+  /** Drop rollers whose centre fails this test. */
+  keepRoller?: (p: P2) => boolean;
+}
+
 /** Collects conveyor parts as instances and builds a handful of InstancedMeshes. */
 class ConveyorBuilder {
   rails: THREE.Matrix4[] = [];
@@ -27,10 +36,14 @@ class ConveyorBuilder {
   legs: THREE.Matrix4[] = [];
   private legAcc = 0;
 
-  addPath(pts: P2[], width: number, closed = false, y = BELT_Y) {
+  addPath(pts: P2[], width: number, opts: PathOptions = {}) {
+    const { closed = false, y = BELT_Y, keepRail, keepRoller } = opts;
     const n = closed ? pts.length : pts.length - 1;
     const q = new THREE.Quaternion();
     const up = new THREE.Vector3(0, 1, 0);
+    const step = 0.11;
+    // Rollers are spaced by distance along the whole path, so tight curves made of short segments stay even.
+    let rollerAcc = step / 2;
     for (let i = 0; i < n; i++) {
       const a = pts[i];
       const b = pts[(i + 1) % pts.length];
@@ -45,22 +58,22 @@ class ConveyorBuilder {
       const mx = (a.x + b.x) / 2;
       const mz = (a.z + b.z) / 2;
       for (const s of [-1, 1]) {
-        this.rails.push(
-          new THREE.Matrix4().compose(
-            new THREE.Vector3(mx + nx * s * (width / 2 + 0.03), y + 0.05, mz + nz * s * (width / 2 + 0.03)),
-            q,
-            new THREE.Vector3(len + 0.01, 0.09, 0.05),
-          ),
-        );
+        const rx = mx + nx * s * (width / 2 + 0.03);
+        const rz = mz + nz * s * (width / 2 + 0.03);
+        if (keepRail && !keepRail({ x: rx, z: rz })) continue;
+        this.rails.push(new THREE.Matrix4().compose(new THREE.Vector3(rx, y + 0.05, rz), q, new THREE.Vector3(len + 0.012, 0.09, 0.05)));
       }
-      this.beds.push(new THREE.Matrix4().compose(new THREE.Vector3(mx, y - 0.1, mz), q, new THREE.Vector3(len + 0.01, 0.1, width + 0.06)));
-      const step = 0.11;
-      const count = Math.max(1, Math.round(len / step));
+      this.beds.push(new THREE.Matrix4().compose(new THREE.Vector3(mx, y - 0.1, mz), q, new THREE.Vector3(len + 0.012, 0.1, width + 0.06)));
       const rq = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, yaw, 0, 'YXZ'));
-      for (let k = 0; k < count; k++) {
-        const f = (k + 0.5) / count;
-        this.rollers.push(new THREE.Matrix4().compose(new THREE.Vector3(a.x + dx * f, y - 0.03, a.z + dz * f), rq, new THREE.Vector3(1, width, 1)));
+      while (rollerAcc <= len) {
+        const f = rollerAcc / len;
+        const p = { x: a.x + dx * f, z: a.z + dz * f };
+        if (!keepRoller || keepRoller(p)) {
+          this.rollers.push(new THREE.Matrix4().compose(new THREE.Vector3(p.x, y - 0.03, p.z), rq, new THREE.Vector3(1, width, 1)));
+        }
+        rollerAcc += step;
       }
+      rollerAcc -= len;
       this.legAcc += len;
       if (this.legAcc > 1.6) {
         this.legAcc = 0;
@@ -164,15 +177,31 @@ export function buildFactory(sim: Simulation): Factory {
   addLine(-ox, -oz, ox, -oz);
   addLine(ox, -oz, ox, oz);
 
-  // Conveyors
+  // Conveyors. Side tracks first: the loop's outer rail opens wherever a side track joins it.
   const cb = new ConveyorBuilder();
+  const branches = layout.stations.map((g) => sideTrackPath(layout, g));
+  const induct = inductPath(layout);
+  branches.push(induct.bend);
+  const onBranch = (p: P2) =>
+    branches.some((pts) => pts.some((c, i) => i > 0 && distToSegment(p, pts[i - 1], c) < LANE_WIDTH / 2 + 0.02));
   const loopPts: P2[] = [];
   const nLoop = Math.round(layout.perimeter / 0.25);
   for (let i = 0; i < nLoop; i++) {
     const s = (i / nLoop) * layout.cells;
     loopPts.push(cellPoint(layout, s));
   }
-  cb.addPath(loopPts, LOOP_WIDTH, true);
+  cb.addPath(loopPts, LOOP_WIDTH, { closed: true, keepRail: (p) => !onBranch(p) });
+  layout.stations.forEach((g, i) => {
+    const a = cellPoint(layout, g.divertCell);
+    // How far a point is from the loop's centreline, sideways (stations sit on the straights).
+    const lateral = (p: P2) => (p.x - a.x) * g.normal.x + (p.z - a.z) * g.normal.z;
+    cb.addPath(branches[i], LANE_WIDTH, {
+      // Sits a touch lower so the loop's belt stays on top where they overlap.
+      y: BELT_Y - 0.008,
+      keepRail: (p) => lateral(p) > LOOP_WIDTH / 2 + 0.05,
+      keepRoller: (p) => lateral(p) > LOOP_WIDTH / 2 + 0.06,
+    });
+  });
 
   const stations: StationVisual[] = [];
   const rackParts: THREE.Matrix4[] = [];
@@ -182,23 +211,6 @@ export function buildFactory(sim: Simulation): Factory {
   for (const g of layout.stations) {
     const n = g.normal;
     const t = g.tangent;
-    // Side track parallel to the loop, with short diagonal transfers off and back on.
-    const offLoop = (cell: number): P2 => {
-      const p = cellPoint(layout, cell);
-      return { x: p.x + n.x * (LOOP_WIDTH / 2 - 0.05), z: p.z + n.z * (LOOP_WIDTH / 2 - 0.05) };
-    };
-    const firstSide = g.inLane[0];
-    const lastSide = g.outLane[0];
-    cb.addPath(
-      [
-        offLoop(g.divertCell + 0.15),
-        { x: firstSide.x - t.x * 0.3, z: firstSide.z - t.z * 0.3 },
-        { x: lastSide.x + t.x * 0.3, z: lastSide.z + t.z * 0.3 },
-        offLoop(g.mergeCell - 0.15),
-      ],
-      LANE_WIDTH,
-    );
-
     // Rack behind the worker, facing the loop.
     const rack = g.rack;
     const rackYaw = Math.atan2(-g.tangent.z, g.tangent.x);
@@ -300,9 +312,14 @@ export function buildFactory(sim: Simulation): Factory {
     root.add(m);
   }
 
-  // Induction: box erector + incoming lane.
+  // Induction: box erector + incoming lane, curving onto the loop.
   const il = layout.inductLane;
-  cb.addPath([{ x: il[il.length - 1].x, z: il[il.length - 1].z + 0.4 }, { x: il[0].x, z: il[0].z - 0.5 }], LANE_WIDTH);
+  const onLoop = (p: P2) => loopPts.some((c, i) => i > 0 && distToSegment(p, loopPts[i - 1], c) < LOOP_WIDTH / 2 + 0.05);
+  cb.addPath([{ x: il[il.length - 1].x, z: il[il.length - 1].z + 0.4 }, ...induct.bend], LANE_WIDTH, {
+    y: BELT_Y - 0.008,
+    keepRail: (p) => !onLoop(p),
+    keepRoller: (p) => !onLoop(p),
+  });
   const erector = new THREE.Group();
   const body = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.9, 1.3), new THREE.MeshStandardMaterial({ color: 0xe5e7eb, roughness: 0.4, metalness: 0.3 }));
   body.position.y = 0.95;
@@ -311,6 +328,14 @@ export function buildFactory(sim: Simulation): Factory {
   const win = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.8), new THREE.MeshStandardMaterial({ color: 0x223, roughness: 0.1, metalness: 0.2, transparent: true, opacity: 0.6 }));
   win.position.set(0, 1.25, 0.66);
   erector.add(win);
+  // The opening the folded boxes come out of, onto the lane.
+  const mouth = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 0.42), new THREE.MeshStandardMaterial({ color: 0x15171a, roughness: 0.9 }));
+  mouth.rotation.y = Math.PI;
+  mouth.position.set(0, BELT_Y + 0.2, -0.656);
+  erector.add(mouth);
+  const lip = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.05, 0.06), YELLOW);
+  lip.position.set(0, BELT_Y + 0.43, -0.67);
+  erector.add(lip);
   const tag = sprite(labelTexture(['Box erector'], { width: 320 }), 1.1);
   tag.position.set(0, 2.25, 0);
   erector.add(tag);
@@ -421,6 +446,96 @@ export function buildFactory(sim: Simulation): Factory {
 
 export function cellPoint(layout: Layout, cell: number): P2 & { heading: number } {
   return loopCellPoint(layout, cell);
+}
+
+/** Cubic Bézier between two points whose ends both run along `t` (an S-bend when they are offset sideways). */
+export function sBend(p0: P2, p3: P2, t: P2, f: number): P2 & { yaw: number } {
+  const along = (p3.x - p0.x) * t.x + (p3.z - p0.z) * t.z;
+  const h = Math.max(0.05, along) * 0.42;
+  const p1 = { x: p0.x + t.x * h, z: p0.z + t.z * h };
+  const p2 = { x: p3.x - t.x * h, z: p3.z - t.z * h };
+  const u = 1 - f;
+  const b0 = u * u * u, b1 = 3 * u * u * f, b2 = 3 * u * f * f, b3 = f * f * f;
+  const d0 = 3 * u * u, d1 = 6 * u * f, d2 = 3 * f * f;
+  const dx = d0 * (p1.x - p0.x) + d1 * (p2.x - p1.x) + d2 * (p3.x - p2.x);
+  const dz = d0 * (p1.z - p0.z) + d1 * (p2.z - p1.z) + d2 * (p3.z - p2.z);
+  return {
+    x: b0 * p0.x + b1 * p1.x + b2 * p2.x + b3 * p3.x,
+    z: b0 * p0.z + b1 * p1.z + b2 * p2.z + b3 * p3.z,
+    yaw: Math.atan2(-dz, dx),
+  };
+}
+
+/** Cubic Bézier from p0 heading t0 to p3 heading t3 (unit vectors), with yaw along the curve. */
+export function bend(p0: P2, t0: P2, p3: P2, t3: P2, f: number): P2 & { yaw: number } {
+  const h = Math.hypot(p3.x - p0.x, p3.z - p0.z) * 0.45;
+  const p1 = { x: p0.x + t0.x * h, z: p0.z + t0.z * h };
+  const p2 = { x: p3.x - t3.x * h, z: p3.z - t3.z * h };
+  const u = 1 - f;
+  const b0 = u * u * u, b1 = 3 * u * u * f, b2 = 3 * u * f * f, b3 = f * f * f;
+  const d0 = 3 * u * u, d1 = 6 * u * f, d2 = 3 * f * f;
+  const dx = d0 * (p1.x - p0.x) + d1 * (p2.x - p1.x) + d2 * (p3.x - p2.x);
+  const dz = d0 * (p1.z - p0.z) + d1 * (p2.z - p1.z) + d2 * (p3.z - p2.z);
+  return { x: b0 * p0.x + b1 * p1.x + b2 * p2.x + b3 * p3.x, z: b0 * p0.z + b1 * p1.z + b2 * p2.z + b3 * p3.z, yaw: Math.atan2(-dz, dx) };
+}
+
+/** Direction of travel on the loop at a (fractional) cell. */
+export function loopTangent(layout: Layout, cell: number): P2 {
+  const a = cellPoint(layout, cell - 0.05);
+  const b = cellPoint(layout, cell + 0.05);
+  const l = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+  return { x: (b.x - a.x) / l, z: (b.z - a.z) / l };
+}
+
+/** Direction boxes travel along the induction lane (towards the loop). */
+export function inductTangent(layout: Layout): P2 {
+  const [a, b] = layout.inductLane;
+  const l = Math.hypot(a.x - b.x, a.z - b.z) || 1;
+  return { x: (a.x - b.x) / l, z: (a.z - b.z) / l };
+}
+
+/** The induction lane's last stretch: a bend from the head of the queue onto the loop, joining it tangentially. */
+function inductPath(layout: Layout): { bend: P2[] } {
+  const p0 = layout.inductLane[0];
+  const t0 = inductTangent(layout);
+  const end = layout.inductCell + 0.5;
+  const p3 = cellPoint(layout, end);
+  const t3 = loopTangent(layout, end);
+  const pts: P2[] = [];
+  for (let i = 0; i <= 24; i++) pts.push(bend(p0, t0, p3, t3, i / 24));
+  return { bend: pts };
+}
+
+/** Lead-in on the loop before the divert (and run-out after the merge), in cells. */
+const BEND_LEAD = 0.7;
+/** Where a side track's centreline leaves the loop, sideways from the loop's centreline. */
+const BEND_START = 0.1;
+
+/** Centreline of a station's side track: a smooth S-bend off the loop, the straight run, and an S-bend back on. */
+function sideTrackPath(layout: Layout, g: StationGeom): P2[] {
+  const t = g.tangent;
+  const n = g.normal;
+  const at = (cell: number): P2 => {
+    const p = cellPoint(layout, cell);
+    return { x: p.x + n.x * BEND_START, z: p.z + n.z * BEND_START };
+  };
+  const first = g.inLane[0];
+  const last = g.outLane[0];
+  const pts: P2[] = [];
+  const N = 24;
+  const start = at(g.divertCell - BEND_LEAD);
+  for (let i = 0; i <= N; i++) pts.push(sBend(start, first, t, i / N));
+  const end = at(g.mergeCell + BEND_LEAD);
+  for (let i = 0; i <= N; i++) pts.push(sBend(last, end, t, i / N));
+  return pts;
+}
+
+function distToSegment(p: P2, a: P2, b: P2): number {
+  const dx = b.x - a.x;
+  const dz = b.z - a.z;
+  const l2 = dx * dx + dz * dz;
+  const f = l2 > 0 ? Math.min(1, Math.max(0, ((p.x - a.x) * dx + (p.z - a.z) * dz) / l2)) : 0;
+  return Math.hypot(p.x - a.x - dx * f, p.z - a.z - dz * f);
 }
 
 function makeTruck(tex: THREE.Texture): THREE.Group {

@@ -32,6 +32,8 @@ export class Tour {
   private el: HTMLElement;
   private i = 0;
   private lit: Element | null = null;
+  /** Called once each time the tour closes (finished or skipped). */
+  onClose: () => void = () => {};
   private onKey = (e: KeyboardEvent) => {
     if (e.key === 'Escape') this.close();
     else if (e.key === 'Enter') this.go(this.i + 1);
@@ -59,6 +61,7 @@ export class Tour {
     this.highlight(null);
     window.removeEventListener('keydown', this.onKey);
     markSeen();
+    this.onClose();
   }
 
   private go(i: number): void {
@@ -139,6 +142,6 @@ export const TOUR_STEPS: TourStep[] = [
     title: 'Now try it yourself',
     highlight: '.lil-gui.root',
     body: `<p>Use the panel to change things while it runs. Set <i>theme surge</i> to taco and watch stations light up red, then switch <i>product slotting</i> to spread. Layout settings like cache size and number of stations take effect when you restart.</p>
-      <p>Drag to orbit, scroll to zoom towards the mouse, WASD to fly, arrow keys to turn, and M to walk around at eye level. You can replay this tour from Camera → Tutorial.</p>`,
+      <p>Click any box to see its order, what should go in it and what is packed so far, and press <i>Follow</i> to ride along. Drag to rotate, right-drag to move, scroll to zoom towards the mouse, WASD to fly and Q/E to go down and up. Press M to walk around at eye level: click to look around with the mouse, Esc to let it go. You can replay this tour from Camera → Tutorial.</p>`,
   },
 ];

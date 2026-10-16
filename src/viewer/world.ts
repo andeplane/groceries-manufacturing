@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Loc, ROUTE_NAMES, type Box, type Product, type Simulation } from '../core';
-import { buildFactory, cellPoint, BELT_Y, type Factory } from './factory';
+import { bend, buildFactory, cellPoint, inductTangent, loopTangent, sBend, BELT_Y, type Factory } from './factory';
 import { ProductLayer, productMaterial, type ProductLook } from '../products3d';
 import { cardboardTexture, labelTexture } from './textures';
 import { Worker } from './worker';
@@ -14,6 +14,8 @@ interface Pose {
   y: number;
   z: number;
   yaw: number;
+  loc?: Loc;
+  station?: number;
 }
 
 type Remap = (tile: [number, number, number, number, number]) => [number, number, number, number];
@@ -29,6 +31,7 @@ export class World {
   private rackProducts: ProductLayer;
   private workers: Worker[] = [];
   private prev = new Map<number, Pose>();
+  private drawn: { m: THREE.Matrix4; box: Box }[] = [];
   private cur = new Map<number, Pose>();
   private dockIndex = new Map<number, number>();
   private dockCount = new Map<number, number>();
@@ -225,7 +228,11 @@ export class World {
       if (b.loc === Loc.Pending && !queuePos.has(b.id)) continue;
       if (b.loc === Loc.Outbound) continue;
       const p = this.poseOf(b, queuePos);
-      if (p) next.set(b.id, p);
+      if (p) {
+        p.loc = b.loc;
+        p.station = b.station;
+        next.set(b.id, p);
+      }
     }
     if (reset) this.prev = next;
     else {
@@ -257,6 +264,19 @@ export class World {
       const box = sim.boxes.get(id);
       if (!box) continue;
       const p = this.prev.get(id) ?? c;
+      // Transfers onto and off a side track follow the S-bend of the belt.
+      const g = c.loc === Loc.InLane && p.loc === Loc.Loop ? sim.layout.stations[c.station!]
+        : c.loc === Loc.Loop && p.loc === Loc.OutLane ? sim.layout.stations[p.station!] : null;
+      if (g) {
+        const b = sBend(p, c, g.tangent, alpha);
+        setBox(box, b.x, BELT_Y, b.z, b.yaw);
+        continue;
+      }
+      if (p.loc === Loc.Pending && c.loc === Loc.Loop) {
+        const b = bend(p, inductTangent(sim.layout), c, loopTangent(sim.layout, sim.layout.inductCell), alpha);
+        setBox(box, b.x, BELT_Y, b.z, b.yaw);
+        continue;
+      }
       let dy = c.yaw - p.yaw;
       dy = Math.atan2(Math.sin(dy), Math.cos(dy));
       setBox(box, p.x + (c.x - p.x) * alpha, p.y + (c.y - p.y) * alpha, p.z + (c.z - p.z) * alpha, p.yaw + dy * alpha);
@@ -275,6 +295,7 @@ export class World {
       this.inner.setMatrixAt(i, m);
     });
     this.outer.count = this.inner.count = n;
+    this.drawn = boxMatrices;
     this.outer.instanceMatrix.needsUpdate = this.inner.instanceMatrix.needsUpdate = true;
 
     // Products inside boxes (not for boxes already stacked at the dock — they are closed up).
@@ -378,6 +399,22 @@ export class World {
       }
       d.truck.position.x = x;
     });
+  }
+
+  /** Box under the ray, if any. */
+  pickBox(ray: THREE.Raycaster): Box | null {
+    // Instances move every frame, so the cached bounding sphere is always stale.
+    this.outer.boundingSphere = null;
+    const hit = ray.intersectObject(this.outer, false)[0];
+    if (!hit || hit.instanceId === undefined) return null;
+    return this.drawn[hit.instanceId]?.box ?? null;
+  }
+
+  /** Where a box was drawn in the last frame (centre of its opening), or null when it isn't visible. */
+  boxPosition(id: number, out = new THREE.Vector3()): THREE.Vector3 | null {
+    const d = this.drawn.find((x) => x.box.id === id);
+    if (!d) return null;
+    return out.setFromMatrixPosition(d.m).setY(out.y + BOX_H);
   }
 
   /** Station whose hit-box the ray hits, or -1. */

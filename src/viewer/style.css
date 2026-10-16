@@ -29,6 +29,33 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1d22; col
 #station h2 { margin: 0 0 4px; font-size: 14px; }
 #station ol { margin: 6px 0 0; padding-left: 18px; color: var(--muted); }
 #station .x { position: absolute; top: 6px; right: 10px; cursor: pointer; color: var(--muted); }
+#station h3 { margin: 10px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); }
+#station .chip { font-size: 10px; font-weight: 600; color: #10151b; border-radius: 4px; padding: 1px 6px; vertical-align: 2px; }
+#station .status { margin: 4px 0 6px; color: #d5dbe2; }
+#station .muted { color: var(--muted); font-size: 12px; }
+#station .prog { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+#station .prog i { display: block; height: 100%; background: var(--accent); transition: width 0.3s; }
+#station .btn { margin-top: 8px; font: inherit; font-weight: 600; cursor: pointer; border: 0; border-radius: 7px; padding: 6px 12px; background: var(--accent); color: #fff; }
+#station ol.plan { list-style: none; padding: 0; margin: 0; color: var(--fg); }
+#station .plan .stop { margin: 0 0 6px; }
+#station .plan .sh { display: flex; gap: 6px; font-weight: 600; cursor: pointer; }
+#station .plan .sh:hover { color: var(--accent); }
+#station .plan em { margin-left: auto; font-style: normal; color: var(--muted); font-variant-numeric: tabular-nums; padding-left: 8px; }
+#station .plan ul { list-style: none; margin: 2px 0 0; padding: 0 0 0 20px; }
+#station .plan ul li { display: flex; gap: 6px; font-size: 12px; color: #c7cfd8; }
+#station .plan .ck { width: 14px; flex: none; color: var(--accent); text-align: center; }
+#station .plan li.done { color: var(--muted); }
+#station .plan ul li.done { text-decoration: line-through; text-decoration-color: rgba(255, 255, 255, 0.25); }
+#station .plan .stop.here .sh { color: #facc15; }
+#station .plan .stop.here .ck { color: #facc15; }
+#crosshair { position: fixed; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.85); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4); pointer-events: none; display: none; z-index: 3; }
+#crosshair.hit { border-color: var(--accent); background: var(--accent); transform: scale(1.4); }
+#boxtip { position: fixed; transform: translate(-50%, calc(-100% - 10px)); background: rgba(16, 19, 24, 0.9); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 7px; padding: 4px 9px; font-size: 12px; line-height: 1.35; white-space: nowrap; pointer-events: none; display: none; z-index: 3; }
+#boxtip .muted { color: var(--muted); font-size: 11px; }
+#controls { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); background: rgba(16, 19, 24, 0.88); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 14px 20px; font-size: 14px; line-height: 2; text-align: center; pointer-events: none; opacity: 0; transition: opacity 0.8s; z-index: 4; backdrop-filter: blur(6px); }
+#controls.on { opacity: 1; transition: opacity 0.3s; }
+#controls h3 { margin: 0 0 4px; font-size: 16px; }
+#controls kbd, #camhint kbd { display: inline-block; min-width: 22px; padding: 0 6px; margin: 0 1px; border-radius: 5px; background: rgba(255, 255, 255, 0.12); border-bottom: 2px solid rgba(0, 0, 0, 0.4); font: 600 12px/22px system-ui, sans-serif; text-align: center; }
 .lil-gui.root { --width: 250px; }
 #tour { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); width: min(520px, calc(100vw - 32px)); background: rgba(16, 19, 24, 0.94); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 14px 18px 12px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45); backdrop-filter: blur(8px); z-index: 5; display: none; font-size: 13.5px; line-height: 1.5; }
 #tour h2 { margin: 4px 0 6px; font-size: 17px; }
