@@ -44,7 +44,8 @@ export function summarize(s: SimStats): string {
   const util = s.utilization;
   const mean = util.reduce((a, b) => a + b, 0) / util.length;
   return [
-    `UPH per packer      ${f(s.uphPerPacker)}   warehouse UPH (incl. support staff) ${f(s.uphWarehouse)}`,
+    `UPH per packer      ${s.humanStations ? f(s.uphPerPacker) : '-'}   warehouse UPH (incl. support staff) ${f(s.uphWarehouse)}`,
+    ...(s.robotStations ? [`UPH per robot       ${f(s.uphPerRobot)}   (${s.robotStations} robot arms, ${s.humanStations} packers)`] : []),
     `line output         ${f(s.lineUph)} units/h`,
     `units packed        ${s.unitsPacked}`,
     `orders arrived/shipped ${s.ordersArrived} / ${s.ordersShipped}`,

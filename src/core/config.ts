@@ -2,11 +2,14 @@ export type SlottingStrategy = 'random' | 'category' | 'balanced' | 'spread';
 export type ReleasePolicy = 'fifo' | 'trip-wave' | 'balance';
 export type BoxingStrategy = 'zone-fill' | 'station-aware';
 export type Theme = 'none' | 'taco' | 'grill' | 'party';
+/** Who packs at the stations: people, robot arms, or every other station a robot. */
+export type PackerKind = 'human' | 'robot' | 'mixed';
 
 export const SLOTTING_STRATEGIES: readonly SlottingStrategy[] = ['random', 'category', 'balanced', 'spread'];
 export const RELEASE_POLICIES: readonly ReleasePolicy[] = ['fifo', 'trip-wave', 'balance'];
 export const BOXING_STRATEGIES: readonly BoxingStrategy[] = ['zone-fill', 'station-aware'];
 export const THEMES: readonly Theme[] = ['none', 'taco', 'grill', 'party'];
+export const PACKER_KINDS: readonly PackerKind[] = ['human', 'robot', 'mixed'];
 
 export interface SimConfig {
   seed: number;
@@ -28,12 +31,20 @@ export interface SimConfig {
   slotting: SlottingStrategy;
 
   // --- Operations (live-tunable) ---
+  /** Who packs: 'human', 'robot' (robot arm at every station) or 'mixed' (every other station is a robot). */
+  packers: PackerKind;
   /** Mean seconds to pick, (scan) and place one unit. */
   unitTime: number;
   /** Standard deviation of unit time as a fraction of the mean (Gaussian). */
   unitTimeCv: number;
   /** Human floor: nobody picks, scans and places a unit faster than this (s). */
   unitTimeMin: number;
+  /** Robot arm: mean seconds to pick and place one unit. */
+  robotUnitTime: number;
+  /** Robot arm: standard deviation of unit time as a fraction of the mean. */
+  robotUnitTimeCv: number;
+  /** Robot arm: fastest possible unit (s), set by its motion limits. */
+  robotUnitTimeMin: number;
   /**
    * Support hours (receiving, restocking, loading, cleaning) per packer hour. Online grocers' published UPH
    * (~300) counts all productive warehouse hours, not just packing.
@@ -91,6 +102,10 @@ export const DEFAULT_CONFIG: SimConfig = {
   unitTime: 4.5,
   unitTimeCv: 0.35,
   unitTimeMin: 2.0,
+  packers: 'human',
+  robotUnitTime: 3.2,
+  robotUnitTimeCv: 0.08,
+  robotUnitTimeMin: 2.4,
   supportStaffRatio: 0.5,
   boxHandlingTime: 4,
   inductInterval: 1.6,
@@ -110,6 +125,11 @@ export const DEFAULT_CONFIG: SimConfig = {
   outboundTravel: 25,
   dockDoors: 8,
 };
+
+/** Whether station `index` is packed by a robot arm under `cfg.packers`. */
+export function isRobotStation(cfg: Pick<SimConfig, 'packers'>, index: number): boolean {
+  return cfg.packers === 'robot' || (cfg.packers === 'mixed' && index % 2 === 1);
+}
 
 /** Keys that only take effect on restart. */
 export const RESTART_KEYS: readonly (keyof SimConfig)[] = [
