@@ -96,7 +96,7 @@ export interface SimStats {
   /** Units per packer-hour (one packer per station). */
   uphPerPacker: number;
   uphPerPackerRecent: number;
-  /** Units per productive warehouse hour incl. support staff — comparable to Oda's published UPH. */
+  /** Units per productive warehouse hour incl. support staff — comparable to online grocers' published UPH. */
   uphWarehouse: number;
   uphWarehouseRecent: number;
   ordersArrived: number;

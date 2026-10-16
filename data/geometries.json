@@ -1,5 +1,5 @@
 {
-  "_note": "Base 3D geometry types for Oda products. Each product gets one type from the OpenAI Decisions API; the 3D model is the base mesh scaled to the product's pack size, with the product image as texture. aspect = typical w:h:d (width, height, depth as it stands on a shelf).",
+  "_note": "Base 3D geometry types for grocery products. Each product gets one type from the OpenAI Decisions API; the 3D model is the base mesh scaled to the product's pack size, with the product image as texture. aspect = typical w:h:d (width, height, depth as it stands on a shelf).",
   "types": {
     "can":            {"desc": "Metal cylinder can: canned food (hermetikk), soda/beer can, tinned fish", "aspect": [1, 1.4, 1]},
     "pet_bottle":     {"desc": "Plastic drink bottle with narrow neck: soda, water, juice, iced tea, smoothie", "aspect": [1, 3.2, 1]},

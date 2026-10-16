@@ -20,7 +20,7 @@ function fibres(ctx: CanvasRenderingContext2D, w: number, h: number, n: number, 
   }
 }
 
-/** Kraft cardboard with the oda wordmark (outer sides of a box). */
+/** Kraft cardboard with the kurvi wordmark (outer sides of a box). */
 export function cardboardTexture(withLogo: boolean): THREE.Texture {
   const [c, ctx] = canvas(512, 256);
   ctx.fillStyle = withLogo ? '#c69c6d' : '#a97f52';
@@ -31,11 +31,11 @@ export function cardboardTexture(withLogo: boolean): THREE.Texture {
     ctx.font = '600 92px "Helvetica Neue", Arial, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('oda', 256, 138);
+    ctx.fillText('kurvi', 256, 138);
     ctx.font = 'italic 22px Georgia, serif';
     ctx.textAlign = 'left';
-    ctx.fillText('Det du trenger,', 24, 40);
-    ctx.fillText('levert på døra', 24, 66);
+    ctx.fillText('Ferske varer,', 24, 40);
+    ctx.fillText('rett hjem', 24, 66);
   }
   // Edge shading
   const g = ctx.createLinearGradient(0, 0, 0, 256);
@@ -117,18 +117,18 @@ export function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w
   ctx.closePath();
 }
 
-/** Truck side: white with the oda wordmark. */
+/** Truck side: white with the kurvi wordmark. */
 export function truckTexture(): THREE.Texture {
   const [c, ctx] = canvas(512, 256);
   ctx.fillStyle = '#f4f4f2';
   ctx.fillRect(0, 0, 512, 256);
-  ctx.fillStyle = '#e9542f';
+  ctx.fillStyle = '#2f9e5a';
   ctx.fillRect(0, 214, 512, 42);
   ctx.fillStyle = '#1d1d1b';
   ctx.font = '700 110px "Helvetica Neue", Arial, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('oda', 256, 112);
+  ctx.fillText('kurvi', 256, 112);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Build public/products.json (+ JPEG texture atlases) from the oda-store catalog.
+"""Build public/products.json (+ JPEG texture atlases) from a store catalog checkout (catalog.json + atlas files).
 
-Usage: python3 scripts/build_catalog.py [path/to/oda-store]
+Usage: python3 scripts/build_catalog.py path/to/store-catalog
 
 Geometry comes from data/classification.jsonl (OpenAI Decisions API, one call per product:
 shape type from data/geometries.json, temperature, size class). Dimensions are derived from the
@@ -13,7 +13,9 @@ import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-STORE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, '..', 'oda-store')
+if len(sys.argv) < 2:
+    sys.exit('usage: python3 scripts/build_catalog.py path/to/store-catalog')
+STORE = sys.argv[1]
 
 CHILLED_CATS = {'Meieri, ost og egg', 'Kylling og kjøtt', 'Fisk og sjømat', 'Pålegg', 'Ferskvaredisken', 'Mathall'}
 CHILLED_SUBS = {'Salat', 'Ferske urter', 'Bær', 'Ferdigretter', 'Fersk pasta', 'Juice og smoothie', 'Pølser'}
