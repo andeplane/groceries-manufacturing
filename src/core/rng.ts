@@ -40,6 +40,15 @@ export class Rng {
     return Math.exp(mu + Math.sqrt(sigma2) * this.normal());
   }
 
+  /** Gaussian with the given mean and standard deviation, truncated below at `min` (resampled). */
+  truncNormal(mean: number, sd: number, min: number): number {
+    for (let i = 0; i < 16; i++) {
+      const x = mean + sd * this.normal();
+      if (x >= min) return x;
+    }
+    return min;
+  }
+
   exponential(mean: number): number {
     return -Math.log(1 - this.next()) * mean;
   }

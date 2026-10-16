@@ -109,7 +109,7 @@ export function buildLayout(cfg: SimConfig): Layout {
   const spineX = westX - 6;
 
   const inductLane: P2[] = [];
-  for (let i = 0; i < 6; i++) inductLane.push({ x: ip.x - 1.0 - i * cellLength, z: ip.z + 0.6 + i * 0.25 });
+  for (let i = 0; i < 6; i++) inductLane.push({ x: ip.x - 0.35, z: ip.z + 0.9 + i * cellLength });
 
   const outboundPath: P2[] = [ep, { x: ep.x - 1.5, z: ep.z - 0.6 }, { x: spineX, z: ep.z - 0.6 }];
   const doors = cfg.dockDoors;

@@ -89,9 +89,16 @@ export interface SimStats {
   t: number;
   measuredSeconds: number;
   unitsPacked: number;
-  uph: number;
-  /** UPH over the last 10 simulated minutes. */
-  uphRecent: number;
+  /** Units per hour out of the whole line. */
+  lineUph: number;
+  /** Line UPH over the last 10 simulated minutes. */
+  lineUphRecent: number;
+  /** Units per packer-hour (one packer per station). */
+  uphPerPacker: number;
+  uphPerPackerRecent: number;
+  /** Units per productive warehouse hour incl. support staff — comparable to Oda's published UPH. */
+  uphWarehouse: number;
+  uphWarehouseRecent: number;
   ordersArrived: number;
   ordersShipped: number;
   boxesInducted: number;
@@ -311,8 +318,10 @@ export class Simulation {
         pk.loc = Loc.OutLane;
         pk.cell = C - 1;
         st.packing = null;
-        st.blockedTime += t - st.packEnd;
-        if (st.packEnd >= this.m.since) this.m.blocked[st.index] += t - st.packEnd;
+        // Waiting longer than one conveyor tick for the out-lane counts as blocked.
+        const blocked = Math.max(0, t - st.packEnd - this.dt);
+        st.blockedTime += blocked;
+        if (st.packEnd >= this.m.since) this.m.blocked[st.index] += blocked;
       }
       // d) advance in-lane towards the pack position
       for (let i = C - 2; i >= 0; i--) {
@@ -419,7 +428,7 @@ export class Simulation {
     for (const it of box.items) {
       if (it.station !== st.index) continue;
       for (let q = 0; q < it.qty; q++) {
-        const base = this.rng.lognormal(cfg.unitTime, cfg.unitTimeCv);
+        const base = this.rng.truncNormal(cfg.unitTime, cfg.unitTime * cfg.unitTimeCv, cfg.unitTimeMin);
         tt += q === 0 ? base : base * 0.5; // same product again is quicker
         units.push({ productId: it.productId, station: st.index, t: tt });
       }
@@ -587,8 +596,12 @@ export class Simulation {
       t: this.t,
       measuredSeconds: secs,
       unitsPacked: m.units,
-      uph: (m.units / secs) * 3600,
-      uphRecent: recentSpan > 0 ? (recentUnits / recentSpan) * 3600 : 0,
+      lineUph: (m.units / secs) * 3600,
+      lineUphRecent: recentSpan > 0 ? (recentUnits / recentSpan) * 3600 : 0,
+      uphPerPacker: (m.units / secs) * 3600 / n,
+      uphPerPackerRecent: recentSpan > 0 ? ((recentUnits / recentSpan) * 3600) / n : 0,
+      uphWarehouse: ((m.units / secs) * 3600) / (n * (1 + this.cfg.supportStaffRatio)),
+      uphWarehouseRecent: recentSpan > 0 ? ((recentUnits / recentSpan) * 3600) / (n * (1 + this.cfg.supportStaffRatio)) : 0,
       ordersArrived: this.ordersArrived,
       ordersShipped: m.ordersShipped,
       boxesInducted: this.boxesInducted,

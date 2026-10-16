@@ -28,8 +28,15 @@ export interface SimConfig {
   // --- Operations (live-tunable) ---
   /** Mean seconds to pick, (scan) and place one unit. */
   unitTime: number;
-  /** Coefficient of variation of unit time. */
+  /** Standard deviation of unit time as a fraction of the mean (Gaussian). */
   unitTimeCv: number;
+  /** Human floor: nobody picks, scans and places a unit faster than this (s). */
+  unitTimeMin: number;
+  /**
+   * Support hours (receiving, restocking, loading, cleaning) per packer hour. Oda's published UPH
+   * (~300) counts all productive warehouse hours, not just packing.
+   */
+  supportStaffRatio: number;
   /** Fixed seconds per box visit (box arrives, worker reads the screen, pushes it out). */
   boxHandlingTime: number;
   /** Minimum seconds between two boxes inducted onto the loop. */
@@ -79,7 +86,9 @@ export const DEFAULT_CONFIG: SimConfig = {
   conveyorSpeed: 0.5,
   slotting: 'balanced',
   unitTime: 4.5,
-  unitTimeCv: 0.4,
+  unitTimeCv: 0.35,
+  unitTimeMin: 2.0,
+  supportStaffRatio: 0.5,
   boxHandlingTime: 4,
   inductInterval: 1.6,
   wipCap: 180,

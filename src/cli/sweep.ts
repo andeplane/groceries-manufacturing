@@ -6,7 +6,7 @@ import { RELEASE_POLICIES, SLOTTING_STRATEGIES, type SimConfig } from '../core';
 import { parseArgs, runHeadless } from './run';
 
 const { config, hours, warmup } = parseArgs(process.argv.slice(2));
-const rows: string[][] = [['slotting', 'release', 'theme', 'UPH', 'util min/mean/max %', 'stops/box', 'laps/box', 'dock wait mean/max min', 'lead min']];
+const rows: string[][] = [['slotting', 'release', 'theme', 'UPH/packer', 'whse UPH', 'util min/mean/max %', 'stops/box', 'laps/box', 'dock wait mean/max min', 'lead min']];
 const themes = config.theme ? [config.theme] : (['none', 'taco'] as const);
 for (const theme of themes) {
   for (const slotting of SLOTTING_STRATEGIES) {
@@ -19,7 +19,8 @@ for (const theme of themes) {
         slotting,
         release,
         theme,
-        s.uph.toFixed(0),
+        s.uphPerPacker.toFixed(0),
+        s.uphWarehouse.toFixed(0),
         `${(Math.min(...u) * 100).toFixed(0)}/${(mean * 100).toFixed(0)}/${(Math.max(...u) * 100).toFixed(0)}`,
         s.stopsPerBox.toFixed(2),
         s.lapsPerBox.toFixed(2),

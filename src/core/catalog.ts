@@ -1,14 +1,45 @@
 export type Zone = 'ambient' | 'chilled' | 'frozen';
 export const ZONES: readonly Zone[] = ['ambient', 'chilled', 'frozen'];
 
+/** Packaging geometry types (data/geometries.json), assigned per product by the OpenAI Decisions API. */
 export type Shape =
-  | 'box' | 'carton' | 'bottle' | 'jug' | 'can' | 'jar' | 'tub' | 'tray' | 'pouch' | 'bag'
-  | 'loaf' | 'produce' | 'bunch' | 'tube' | 'roll' | 'multipack' | 'eggs' | 'pot' | 'flat' | 'other';
+  | 'can'
+  | 'pet_bottle'
+  | 'glass_bottle'
+  | 'jug'
+  | 'squeeze_bottle'
+  | 'pump_bottle'
+  | 'aerosol'
+  | 'gable_carton'
+  | 'brick_carton'
+  | 'box'
+  | 'jar'
+  | 'tub'
+  | 'tray'
+  | 'vacuum_pack'
+  | 'block'
+  | 'bar'
+  | 'pillow_bag'
+  | 'standup_pouch'
+  | 'paper_sack'
+  | 'sachet'
+  | 'tube'
+  | 'loaf'
+  | 'produce_round'
+  | 'produce_long'
+  | 'net_bag'
+  | 'clamshell'
+  | 'egg_carton'
+  | 'multipack'
+  | 'roll_pack'
+  | 'soft_pack'
+  | 'flat_pack'
+  | 'blister_card'
+  | 'potted_plant'
+  | 'bouquet'
+  | 'irregular';
 
-export const SHAPES: readonly Shape[] = [
-  'box', 'carton', 'bottle', 'jug', 'can', 'jar', 'tub', 'tray', 'pouch', 'bag',
-  'loaf', 'produce', 'bunch', 'tube', 'roll', 'multipack', 'eggs', 'pot', 'flat', 'other',
-];
+export const SHAPES: readonly Shape[] = ['can', 'pet_bottle', 'glass_bottle', 'jug', 'squeeze_bottle', 'pump_bottle', 'aerosol', 'gable_carton', 'brick_carton', 'box', 'jar', 'tub', 'tray', 'vacuum_pack', 'block', 'bar', 'pillow_bag', 'standup_pouch', 'paper_sack', 'sachet', 'tube', 'loaf', 'produce_round', 'produce_long', 'net_bag', 'clamshell', 'egg_carton', 'multipack', 'roll_pack', 'soft_pack', 'flat_pack', 'blister_card', 'potted_plant', 'bouquet', 'irregular'];
 
 /** One product as shipped in public/products.json (built by scripts/build_catalog.py). */
 export interface Product {
@@ -27,6 +58,8 @@ export interface Product {
   h: number;
   d: number;
   kg: number;
+  /** Mean package colour (sRGB hex) from the product photo. */
+  col?: string;
   /** Optional texture tile: [atlasIndex, u0, v0, u1, v1] (v from top). */
   tile?: [number, number, number, number, number];
 }

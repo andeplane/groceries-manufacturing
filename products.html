@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Oda 3D products</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #e9e6e1; font: 13px system-ui, sans-serif; }
+      canvas { display: block; }
+      #info { position: fixed; top: 12px; left: 12px; background: rgba(255,255,255,0.85); padding: 8px 12px; border-radius: 8px; max-width: 360px; }
+      #info a { color: #e9542f; }
+      #tip { position: fixed; pointer-events: none; background: rgba(20,20,20,0.85); color: #fff; padding: 4px 8px; border-radius: 6px; display: none; }
+    </style>
+  </head>
+  <body>
+    <div id="info"><b>Oda 3D products</b> · one row per packaging type (35), photos from oda.com on procedural meshes. Hover for names. <a href="./">← factory</a></div>
+    <div id="tip"></div>
+    <script type="module" src="/src/viewer/gallery.ts"></script>
+  </body>
+</html>
