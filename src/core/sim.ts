@@ -378,7 +378,7 @@ export class Simulation {
       const b = this.loop[slot];
       if (b) {
         b.laps++;
-      } else if (this.releaseQueue.length && t - this.lastInductAt >= cfg.inductInterval && this.inSystem() < cfg.wipCap) {
+      } else if (this.releaseQueue.length && t - this.lastInductAt >= cfg.inductInterval - 1e-6 && this.inSystem() < cfg.wipCap) {
         const nb = this.pickRelease();
         if (nb) {
           this.loop[slot] = nb;
