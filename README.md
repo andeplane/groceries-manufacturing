@@ -26,7 +26,15 @@ npm test
 
 Any config key works as a CLI flag (`--cacheSize 6 --slotting spread --theme taco …`).
 A guided tour plays on the first visit (replay it from Camera → Tutorial, or force it with `?tour=1`).
-Camera: scroll zooms to the cursor, WASD flies, Q/E or Space go down/up, arrow keys turn, Shift is faster, M toggles walk mode (drag to look, Esc to leave).
+The view opens looking straight down on the hall and then flies down next to the box erector in walk mode
+(after the tour on a first visit; deep links like `?view=station` skip this, `?intro=0` keeps the top view).
+
+Camera: drag rotates around the middle of the view, right-drag (or Shift-drag) moves over the floor, scroll zooms
+towards the cursor, WASD flies level, Q/E (or Space) move the camera down/up, arrow keys turn, Shift is faster.
+M toggles walk mode: click to capture the mouse and look around, WASD to walk, Esc to free the mouse (and again to leave).
+
+Click a box (or, walking, look at it and click) to see its order, where it is, what should be in it and what is packed so
+far, with the stations it visits as a checklist. *Follow* makes the camera ride along with it.
 Viewer URL options: `?warm=1800` (pre-run that many seconds), `?view=station|loop|dock`, `?speed=10`.
 
 ## Model
