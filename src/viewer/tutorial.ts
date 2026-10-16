@@ -136,7 +136,7 @@ export const TOUR_STEPS: TourStep[] = [
     title: 'The numbers',
     highlight: '#hud',
     body: `<p>The big number is <b>UPH per packer</b>: items packed per packer per hour. Around 450 to 500 is good.</p>
-      <p><b>Warehouse UPH</b> also counts support staff (receiving, restocking, loading), which is how the industry usually reports it, at around 300. The graph tracks both over the shift, with that industry level as a dashed line.</p>`,
+      <p><b>Warehouse UPH</b> divides the same items by every productive hour in the building: receiving, restocking, packing and loading (delivery not included). That is how online grocers publish it. The best automated sites reported about 300 to 315 in 2025–26, automated sites average around 250 to 270, and manual warehouses manage roughly 100 to 170. The graph tracks both numbers over the shift against those levels.</p>`,
   },
   {
     title: 'Now try it yourself',

@@ -6,7 +6,7 @@ export interface Series {
   dashed?: boolean;
 }
 
-export function drawChart(canvas: HTMLCanvasElement, times: number[], series: Series[], refs: { value: number; label: string }[] = []) {
+export function drawChart(canvas: HTMLCanvasElement, times: number[], series: Series[], refs: { value: number; label: string; color?: string; left?: boolean }[] = []) {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const W = canvas.clientWidth;
   const H = canvas.clientHeight;
@@ -41,15 +41,16 @@ export function drawChart(canvas: HTMLCanvasElement, times: number[], series: Se
     ctx.fillText(String(v), 2, Y(v) + 3);
   }
   for (const r of refs) {
-    ctx.strokeStyle = 'rgba(233,84,47,0.8)';
+    const c = r.color ?? '233,84,47';
+    ctx.strokeStyle = `rgba(${c},0.8)`;
     ctx.setLineDash([4, 3]);
     ctx.beginPath();
     ctx.moveTo(padL, Y(r.value));
     ctx.lineTo(padL + w, Y(r.value));
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = 'rgba(233,84,47,0.95)';
-    ctx.fillText(r.label, padL + w - ctx.measureText(r.label).width - 2, Y(r.value) - 3);
+    ctx.fillStyle = `rgba(${c},0.95)`;
+    ctx.fillText(r.label, r.left ? padL + 4 : padL + w - ctx.measureText(r.label).width - 2, r.left ? Y(r.value) + 10 : Y(r.value) - 3);
   }
   for (const s of series) {
     if (s.values.length < 2) continue;
