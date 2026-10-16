@@ -25,6 +25,7 @@ npm test
 ```
 
 Any config key works as a CLI flag (`--cacheSize 6 --slotting spread --theme taco …`).
+Camera: scroll zooms to the cursor, WASD flies, Q/E or Space go down/up, arrow keys turn, Shift is faster, M toggles walk mode (drag to look, Esc to leave).
 Viewer URL options: `?warm=1800` (pre-run that many seconds), `?view=station|loop|dock`, `?speed=10`.
 
 ## Model

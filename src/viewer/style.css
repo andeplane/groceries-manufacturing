@@ -18,13 +18,14 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1d22; col
 #hud .muted { color: var(--muted); }
 #hud canvas { display: block; width: 100%; height: 110px; margin-top: 8px; }
 #hud td:first-child { color: var(--muted); padding-right: 14px; }
+#camhint { position: fixed; right: 274px; bottom: 112px; font-size: 11px; color: var(--muted); background: var(--bg); border-radius: 6px; padding: 3px 8px; pointer-events: none; }
 #bars { position: fixed; left: 12px; right: 260px; bottom: 12px; height: 92px; background: var(--bg); border-radius: 10px; padding: 8px 10px 18px; display: flex; gap: 3px; align-items: flex-end; }
 #bars .bar { flex: 1; position: relative; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; cursor: pointer; }
 #bars .bar i { display: block; border-radius: 3px 3px 0 0; min-height: 2px; }
 #bars .bar u { display: block; background: #ef4444; border-radius: 0; }
 #bars .bar span { position: absolute; bottom: -15px; left: 0; right: 0; text-align: center; font-size: 10px; color: var(--muted); }
 #bars .legend { position: absolute; top: 4px; left: 10px; font-size: 11px; color: var(--muted); }
-#station { position: fixed; top: 12px; left: 280px; background: var(--bg); border-radius: 10px; padding: 10px 14px; max-width: 320px; display: none; }
+#station { position: fixed; top: 12px; right: 274px; background: rgba(16, 19, 24, 0.9); border-radius: 10px; padding: 10px 28px 12px 14px; width: 320px; max-height: calc(100vh - 140px); overflow-y: auto; display: none; backdrop-filter: blur(6px); z-index: 2; }
 #station h2 { margin: 0 0 4px; font-size: 14px; }
 #station ol { margin: 6px 0 0; padding-left: 18px; color: var(--muted); }
 #station .x { position: absolute; top: 6px; right: 10px; cursor: pointer; color: var(--muted); }
@@ -33,5 +34,6 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1d22; col
   #hud { min-width: 0; font-size: 11px; padding: 8px 10px; }
   #hud .big { font-size: 22px; }
   #bars { right: 12px; height: 70px; }
-  #station { left: 12px; top: auto; bottom: 100px; }
+  #station { left: 12px; right: 12px; width: auto; top: auto; bottom: 90px; max-height: 45vh; }
+  #camhint { display: none; }
 }

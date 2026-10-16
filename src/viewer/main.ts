@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import GUI from 'lil-gui';
 import {
@@ -10,6 +9,7 @@ import { loadProductAtlas, probeMaxTextureSize } from './textures';
 import { World } from './world';
 import { ZONE_COLOR } from './factory';
 import { drawChart } from './chart';
+import { CameraRig } from './camera';
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -46,11 +46,10 @@ async function main() {
   scene.add(sun, sun.target);
 
   const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.3, 400);
-  const controls = new OrbitControls(camera, canvas);
-  controls.enableDamping = true;
-  controls.maxPolarAngle = Math.PI * 0.49;
-  controls.minDistance = 1.5;
-  controls.maxDistance = 260;
+  const rig = new CameraRig(camera, canvas, () => {
+    const b = sim.layout.bounds;
+    return { minX: sim.layout.docks[0].door.x + 0.6, maxX: b.maxX + 7.4, minZ: b.minZ - 7.4, maxZ: b.maxZ + 12 };
+  });
 
   const params = {
     speed: 4,
@@ -100,28 +99,26 @@ async function main() {
     buildBars();
   };
 
+  const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
   const views = {
     overview: () => {
       const b = sim.layout.bounds;
       const span = b.maxX - b.minX;
       const fit = (span * 0.5) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / camera.aspect;
-      controls.target.set((b.minX + b.maxX) / 2, 0, 1);
-      camera.position.set((b.minX + b.maxX) / 2, fit * 0.72, 1 + fit * 0.62);
+      const cx = (b.minX + b.maxX) / 2;
+      rig.look(V(cx, fit * 0.72, 1 + fit * 0.62), V(cx, 0, 1));
     },
     station: () => {
       const g = sim.layout.stations[3];
       const p = g.inLane[g.inLane.length - 1];
-      controls.target.set(p.x, 1.0, p.z);
-      camera.position.set(p.x + g.tangent.x * 2.2 - g.normal.x * 3.2, 2.6, p.z + g.tangent.z * 2.2 - g.normal.z * 3.2);
+      rig.look(V(p.x + g.tangent.x * 2.2 - g.normal.x * 3.2, 2.6, p.z + g.tangent.z * 2.2 - g.normal.z * 3.2), V(p.x, 1.0, p.z));
     },
     loop: () => {
-      controls.target.set(0, 0.8, 0);
-      camera.position.set(-sim.layout.straight / 2 - 2, 4.5, sim.layout.radius + 7);
+      rig.look(V(-sim.layout.straight / 2 - 2, 4.5, sim.layout.radius + 7), V(0, 0.8, 0));
     },
     dock: () => {
       const d = sim.layout.docks[Math.floor(sim.layout.docks.length / 2)].door;
-      controls.target.set(d.x + 3, 0.5, d.z);
-      camera.position.set(d.x + 14, 9, d.z + 12);
+      rig.look(V(d.x + 14, 9, d.z + 12), V(d.x + 3, 0.5, d.z));
     },
   };
 
@@ -161,6 +158,22 @@ async function main() {
   cam.add(views, 'station').name('Packing station');
   cam.add(views, 'loop').name('Loop curve');
   cam.add(views, 'dock').name('Dock & trucks');
+  const camState = { walk: false };
+  const walkCtl = cam.add(camState, 'walk').name('Walk mode (M)').onChange((on: boolean) => rig.setMode(on ? 'walk' : 'orbit'));
+  const hint = document.createElement('div');
+  hint.id = 'camhint';
+  document.body.appendChild(hint);
+  const setHint = () => {
+    hint.textContent = rig.mode === 'walk'
+      ? 'Walk: drag to look · WASD walk · arrows turn · Shift run · M / Esc back to orbit'
+      : 'Orbit: drag rotate · right-drag pan · scroll zooms to cursor · WASD fly · Q/E down/up · arrows turn · Shift faster · M walk';
+  };
+  rig.onModeChange = (m) => {
+    camState.walk = m === 'walk';
+    walkCtl.updateDisplay();
+    setHint();
+  };
+  setHint();
   if (window.innerWidth < 700) gui.close();
 
   // ---------- HUD ----------
@@ -294,7 +307,7 @@ async function main() {
   (v && views[v] ? views[v] : views.overview)();
   gui.controllersRecursive().forEach((c) => c.updateDisplay());
   loading.remove();
-  (window as unknown as Record<string, unknown>).__app = { get sim() { return sim; }, get world() { return world; } };
+  (window as unknown as Record<string, unknown>).__app = { get sim() { return sim; }, get world() { return world; }, rig };
 
   // ---------- loop ----------
   const timer = new THREE.Clock();
@@ -328,7 +341,7 @@ async function main() {
     const T = simClock;
     const alpha = Math.min(1, Math.max(0, (T - (sim.t - sim.dt)) / sim.dt));
     world!.update(T, alpha, wall);
-    controls.update();
+    rig.update(dtw);
     renderer.render(scene, camera);
     updateHud(performance.now());
   });
