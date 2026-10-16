@@ -428,7 +428,7 @@ async function main() {
       <div class="big">${s.humanStations ? `${fmt(s.uphPerPackerRecent)} <small>UPH per packer (10 min)</small>` : `${fmt(s.uphPerRobotRecent)} <small>UPH per robot arm (10 min)</small>`}</div>
       ${s.robotStations && s.humanStations ? `<div>${fmt(s.uphPerRobotRecent)} <small>UPH per robot arm</small></div>` : ''}
       <table>
-      <tr><td>Warehouse UPH (incl. support)</td><td>${fmt(s.uphWarehouseRecent)} <span class="muted">· industry ≈ 300</span></td></tr>
+      <tr><td title="Units per productive hour of all warehouse staff: receiving, restocking, packing and loading (not delivery)">Warehouse UPH (all staff)</td><td>${fmt(s.uphWarehouseRecent)} <span class="muted">· best sites ≈ 300–315</span></td></tr>
       <tr><td>Line output</td><td>${fmt(s.lineUphRecent)} units/h · ${s.robotStations ? `${s.humanStations} packers + ${s.robotStations} robots` : `${sim.cfg.stations} packers`}</td></tr>
       <tr><td>Units packed</td><td>${fmt(s.unitsPacked)}</td></tr>
       <tr><td>Orders in / shipped</td><td>${fmt(s.ordersArrived)} / ${fmt(s.ordersShipped)}</td></tr>
@@ -442,7 +442,12 @@ async function main() {
     drawChart(hud.querySelector('#chart') as HTMLCanvasElement, history.map((h) => h.t), [
       { name: 'per packer', color: '#4ade80', values: history.map((h) => h.packer) },
       { name: 'warehouse', color: '#60a5fa', values: history.map((h) => h.whse) },
-    ], [{ value: 310, label: 'industry ~310' }]);
+    ], [
+      // Published whole-warehouse UPH (all productive staff hours, delivery excluded), 2025–2026.
+      { value: 315, label: 'best sites ~315' },
+      { value: 268, label: 'automated avg ~270', color: '250,204,21', left: true },
+      { value: 120, label: 'manual ~100–170', color: '148,163,184' },
+    ]);
     const bl = blockedHist.length >= 2 ? blockedHist[blockedHist.length - 1].blocked.map((x, i) => (x - blockedHist[0].blocked[i]) / Math.max(1, blockedHist[blockedHist.length - 1].t - blockedHist[0].t)) : [];
     barEls.forEach((el, i) => {
       (el.children[1] as HTMLElement).style.height = `${Math.round(u[i] * 100)}%`;

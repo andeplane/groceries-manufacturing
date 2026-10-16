@@ -60,11 +60,22 @@ Robots pick at `robotUnitTime` (mean 3.2 s, σ 8 %, floor 2.4 s) instead of the 
 
 ### UPH
 
-Published online-grocer UPH figures (~300) counts all productive warehouse hours (receiving, restocking, packing,
-loading). The viewer and CLI therefore report:
+Published online-grocer UPH figures are whole-warehouse ("wall-to-wall") numbers: items processed per productive
+labour hour across every process from goods reception and restocking to picking, packing and readying for loading.
+Delivery is excluded. They are not per-picker rates. Reference points the viewer draws on its chart:
 
-- **UPH per packer** — units per packer-hour at the stations (~460; published figures cite 500+ picks per operator-hour),
-- **Warehouse UPH** — the same units divided by packer hours plus support hours (`supportStaffRatio`, default 0.5 → ~310),
+- best automated sites: ~300 (a Norwegian online grocer, weekly average, Oct 2025) and 315 (a UK CFC's half-year
+  average, H1 2026, peak 318),
+- automated fleet average: ~245–270 (UK automated CFCs, FY25–H1 2026),
+- manual warehouses: ~100–170 (store picking ~70).
+
+The viewer and CLI therefore report:
+
+- **UPH per packer** — units per packer-hour at the stations (~477; station hardware is rated at 600+ presentations or
+  picks per hour, so this sits well inside it),
+- **Warehouse UPH** — the same units divided by packer hours plus support hours (`supportStaffRatio`, default 0.5,
+  i.e. packing is two thirds of all hours → ~318). No grocer publishes its labour split, so treat the ratio as the
+  knob that maps station productivity to the published whole-warehouse figures; 0.6–0.7 gives ~280–300,
 - **Line output** — total units/hour out of the loop.
 
 ## Data
